@@ -5,3 +5,5 @@ export * from './schema/definition.js';
 export * from './schema/validate.js';
 export * from './decode.js';
 export * from './delimiter.js';
+export * from './header.js';
+export * from './parse.js';

@@ -51,8 +51,8 @@ describe('detectDelimiter (AC-6)', () => {
     expect(detectDelimiter('ab"c;d;e,f\n')).toBe(';');
   });
 
-  it('allows spaces before an opening quote', () => {
-    expect(detectDelimiter('a; "b;c;d";e\n')).toBe(';');
-    expect(detectDelimiter('a, "b;c;d",e\n')).toBe(',');
+  it('opens a quoted field only at field start, like the parser (AC-7)', () => {
+    // Lenient quote detection would hide the commas here and pick ';'.
+    expect(detectDelimiter('a;b, "c,d,e";f;g\n')).toBe(',');
   });
 });

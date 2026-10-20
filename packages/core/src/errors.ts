@@ -42,3 +42,8 @@ export const ERROR_LEVEL: Readonly<Record<ErrorCode, 'file' | 'row'>> = {
   ABOVE_MAX: 'row',
   NOT_UNIQUE: 'row',
 };
+
+export interface FileError {
+  code: FileErrorCode;
+  message: string;
+}

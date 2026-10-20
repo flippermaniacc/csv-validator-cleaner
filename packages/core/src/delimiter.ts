@@ -1,15 +1,6 @@
 export type Delimiter = ',' | ';';
 
-/**
- * Picks the delimiter from the header line (FR-10): the more frequent of
- * unquoted `,` and `;`, with ties (including none) resolving to `,`.
- *
- * The header may span several physical lines when a quoted field contains a
- * newline, so the scan tracks quote state. A `"` only opens a quoted field at
- * the start of a field (RFC 4180); elsewhere it is literal text, so a stray
- * quote in an unquoted header cannot hide the real delimiters. Leading empty
- * lines are skipped, matching how the parser finds the header row.
- */
+/** Picks the more frequent unquoted `,` or `;` in the header line, ties to `,` (FR-10). */
 export function detectDelimiter(text: string): Delimiter {
   let commas = 0;
   let semicolons = 0;
@@ -41,7 +32,7 @@ export function detectDelimiter(text: string): Delimiter {
       if (ch === ',') commas++;
       else semicolons++;
       atFieldStart = true;
-    } else if (ch !== ' ' && ch !== '\t') {
+    } else {
       atFieldStart = false;
     }
   }
