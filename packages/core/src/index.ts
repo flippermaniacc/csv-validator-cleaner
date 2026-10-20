@@ -14,3 +14,6 @@ export * from './rules/date.js';
 export * from './rules/enum.js';
 export * from './rules/pattern.js';
 export * from './rules/range.js';
+export * from './process.js';
+export * from './report.js';
+export * from './unique.js';
