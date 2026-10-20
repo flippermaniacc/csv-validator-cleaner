@@ -3,15 +3,13 @@ import { join } from 'node:path';
 import { buildApp } from './app.js';
 import { isLoopbackHost, loadConfig } from './config.js';
 import { openDatabase } from './db/connection.js';
-import { RunsRepo } from './db/runs.repo.js';
-import { CleanedFileStore } from './storage/cleaned-files.js';
+import { sweepOrphanedFiles } from './startup.js';
 
 const config = loadConfig();
 mkdirSync(join(config.dataDir, 'cleaned'), { recursive: true });
 
 const db = openDatabase(join(config.dataDir, 'app.db'));
-const runs = new RunsRepo(db);
-const removed = await new CleanedFileStore(config.dataDir).sweep((id) => runs.has(id));
+const removed = await sweepOrphanedFiles(db, config.dataDir);
 
 const app = await buildApp({ config, db, logger: { level: process.env['LOG_LEVEL'] ?? 'info' } });
 

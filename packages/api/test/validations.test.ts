@@ -7,7 +7,16 @@ import { processCsv, validateSchemaDefinition } from '@csv-validator/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { re2Engine } from '../src/regex-re2.js';
 import { MAX_UPLOAD_BYTES, safeFilename } from '../src/routes/validations.routes.js';
-import { makeApp, multipartBody, type Part, type TestApp } from './helpers/app.js';
+import { multipartBody, type TestApp } from './helpers/app.js';
+import {
+  createSchema,
+  filePart,
+  GOOD_CSV,
+  SCHEMA,
+  schemaPart,
+  startApp,
+  upload,
+} from './helpers/runs.js';
 
 let current: TestApp | undefined;
 afterEach(async () => {
@@ -15,50 +24,8 @@ afterEach(async () => {
   current = undefined;
 });
 
-const SCHEMA = {
-  name: 'Invoices',
-  columns: [
-    { name: 'id', type: 'integer', required: true, unique: true },
-    { name: 'issued', type: 'date', dateFormat: 'DD.MM.YYYY' },
-    { name: 'name', type: 'string' },
-  ],
-};
-const GOOD_CSV = 'id,issued,name,memo\n 1 ,01.03.2024, Ann , keep \n2,2024-03-02,Bob,\n';
-
-let counter = 0;
-async function start(options: Parameters<typeof makeApp>[0] = {}) {
-  counter = 0;
-  current = await makeApp({
-    ...options,
-    deps: {
-      now: () => new Date('2026-02-03T04:05:06.000Z'),
-      newId: () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`,
-      ...options.deps,
-    },
-  });
-  return current;
-}
-
-async function createSchema(t: TestApp, schema: unknown = SCHEMA) {
-  const response = await t.app.inject({
-    method: 'POST',
-    url: '/api/schemas',
-    payload: schema as object,
-  });
-  return response.json().id as string;
-}
-
-async function upload(t: TestApp, parts: Part[]) {
-  const { payload, headers } = multipartBody(parts);
-  return t.app.inject({ method: 'POST', url: '/api/validations', payload, headers });
-}
-
-const filePart = (data: Buffer | string, filename = 'in.csv'): Part => ({
-  name: 'file',
-  filename,
-  data,
-});
-const schemaPart = (id: string): Part => ({ name: 'schemaId', value: id });
+const start = async (options: Parameters<typeof startApp>[0] = {}) =>
+  (current = await startApp(options));
 
 const runRow = (t: TestApp, id: string) =>
   t.db.prepare('SELECT * FROM runs WHERE id = ?').get(id) as Record<string, unknown>;

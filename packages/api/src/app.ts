@@ -8,6 +8,7 @@ import { SchemasRepo } from './db/schemas.repo.js';
 import { registerErrorHandling } from './errors.js';
 import { re2Engine } from './regex-re2.js';
 import { registerSchemaRoutes } from './routes/schemas.routes.js';
+import { registerRunRoutes } from './routes/runs.routes.js';
 import { registerValidationRoutes } from './routes/validations.routes.js';
 import { ValidationService } from './services/validation.service.js';
 import { CleanedFileStore } from './storage/cleaned-files.js';
@@ -61,18 +62,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const now = deps.now ?? (() => new Date());
   const newId = deps.newId ?? randomUUID;
 
+  const runs = new RunsRepo(db);
+  const files = new CleanedFileStore(config.dataDir);
+
   registerSchemaRoutes(app, { repo: schemas, regex, now, newId });
   await registerValidationRoutes(
     app,
-    new ValidationService({
-      schemas,
-      runs: new RunsRepo(db),
-      files: new CleanedFileStore(config.dataDir),
-      regex,
-      now,
-      newId,
-    }),
+    new ValidationService({ schemas, runs, files, regex, now, newId }),
   );
+  registerRunRoutes(app, { runs, files });
 
   return app;
 }

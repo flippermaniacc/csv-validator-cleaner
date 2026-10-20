@@ -53,6 +53,17 @@ interface Row {
   cleaned_size_bytes: number | null;
 }
 
+export interface RunCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface ErrorPage {
+  items: RowError[];
+  /** Stored errors matching the filter (at most 1000 per run, FR-26). */
+  total: number;
+}
+
 export class RunsRepo {
   constructor(private readonly db: Db) {}
 
@@ -89,6 +100,49 @@ export class RunsRepo {
   get(id: string): RunRecord | null {
     const row = this.db.prepare('SELECT * FROM runs WHERE id = ?').get(id) as Row | undefined;
     return row ? fromRow(row) : null;
+  }
+
+  /** Newest first, keyset-paginated on (created_at, id) so pages stay stable under inserts (FR-24). */
+  list(limit: number, after?: RunCursor): { items: RunRecord[]; hasMore: boolean } {
+    const rows = (
+      after
+        ? this.db
+            .prepare(
+              `SELECT * FROM runs WHERE (created_at, id) < (?, ?)
+               ORDER BY created_at DESC, id DESC LIMIT ?`,
+            )
+            .all(after.createdAt, after.id, limit + 1)
+        : this.db
+            .prepare('SELECT * FROM runs ORDER BY created_at DESC, id DESC LIMIT ?')
+            .all(limit + 1)
+    ) as Row[];
+    return { items: rows.slice(0, limit).map(fromRow), hasMore: rows.length > limit };
+  }
+
+  errors(runId: string, page: { offset: number; limit: number; code?: RowErrorCode }): ErrorPage {
+    const filter = page.code ? ' AND code = @code' : '';
+    const params = { runId, code: page.code ?? null, limit: page.limit, offset: page.offset };
+    const items = this.db
+      .prepare(
+        `SELECT "row", "column", code, message, value FROM run_errors
+         WHERE run_id = @runId${filter} ORDER BY seq LIMIT @limit OFFSET @offset`,
+      )
+      .all(params) as RowError[];
+    const { total } = this.db
+      .prepare(`SELECT COUNT(*) AS total FROM run_errors WHERE run_id = @runId${filter}`)
+      .get({ runId, code: page.code ?? null }) as { total: number };
+    return { items, total };
+  }
+
+  /** Removes the run and, by cascade, its errors. Returns the cleaned file path to delete, or null if unknown. */
+  delete(id: string): { cleanedPath: string | null } | null {
+    return this.db.transaction(() => {
+      const row = this.db.prepare('SELECT cleaned_path FROM runs WHERE id = ?').get(id) as
+        { cleaned_path: string | null } | undefined;
+      if (!row) return null;
+      this.db.prepare('DELETE FROM runs WHERE id = ?').run(id);
+      return { cleanedPath: row.cleaned_path };
+    })();
   }
 
   has(id: string): boolean {

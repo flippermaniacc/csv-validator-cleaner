@@ -1,8 +1,8 @@
 import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
-import type { RunRecord } from '../db/runs.repo.js';
 import { ApiError } from '../errors.js';
 import type { ValidationService } from '../services/validation.service.js';
+import { presentRun } from './present.js';
 
 /** Upload limit (FR-7): exactly 10 MiB is accepted, one byte more is rejected. */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -51,32 +51,6 @@ export async function registerValidationRoutes(
     });
     return reply.code(201).send(presentRun(run));
   });
-}
-
-/** The run as clients see it: counts and metadata, without the snapshot or error list. */
-export function presentRun(run: RunRecord) {
-  return {
-    id: run.id,
-    createdAt: run.createdAt,
-    originalFilename: run.originalFilename,
-    fileSizeBytes: run.fileSizeBytes,
-    fileSha256: run.fileSha256,
-    schema: { id: run.schemaId, name: run.schemaName },
-    status: run.status,
-    fileError: run.fileError,
-    detectedEncoding: run.detectedEncoding,
-    detectedDelimiter: run.detectedDelimiter,
-    totalRows: run.totalRows,
-    validRows: run.validRows,
-    invalidRows: run.invalidRows,
-    duplicateRowsDropped: run.duplicateRowsDropped,
-    totalErrors: run.totalErrors,
-    truncated: run.truncated,
-    errorCountsByCode: run.errorCountsByCode,
-    passthroughColumns: run.passthroughColumns,
-    sanitizedCells: run.sanitizedCells,
-    cleanedSizeBytes: run.cleanedSizeBytes,
-  };
 }
 
 /** Strips path parts and control characters; the name is metadata only, never a path (design 4.2). */
