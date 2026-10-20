@@ -3,10 +3,14 @@ import type { RegexEngine } from '@csv-validator/core';
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type { Config } from './config.js';
 import type { Db } from './db/connection.js';
+import { RunsRepo } from './db/runs.repo.js';
 import { SchemasRepo } from './db/schemas.repo.js';
 import { registerErrorHandling } from './errors.js';
 import { re2Engine } from './regex-re2.js';
 import { registerSchemaRoutes } from './routes/schemas.routes.js';
+import { registerValidationRoutes } from './routes/validations.routes.js';
+import { ValidationService } from './services/validation.service.js';
+import { CleanedFileStore } from './storage/cleaned-files.js';
 import { registerSecurity } from './security.js';
 
 export interface AppDeps {
@@ -52,12 +56,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return { status: 'ok' };
   });
 
-  registerSchemaRoutes(app, {
-    repo: new SchemasRepo(db),
-    regex: deps.regex ?? re2Engine,
-    now: deps.now ?? (() => new Date()),
-    newId: deps.newId ?? randomUUID,
-  });
+  const schemas = new SchemasRepo(db);
+  const regex = deps.regex ?? re2Engine;
+  const now = deps.now ?? (() => new Date());
+  const newId = deps.newId ?? randomUUID;
+
+  registerSchemaRoutes(app, { repo: schemas, regex, now, newId });
+  await registerValidationRoutes(
+    app,
+    new ValidationService({
+      schemas,
+      runs: new RunsRepo(db),
+      files: new CleanedFileStore(config.dataDir),
+      regex,
+      now,
+      newId,
+    }),
+  );
 
   return app;
 }
