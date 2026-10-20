@@ -1,13 +1,21 @@
 import { randomUUID } from 'node:crypto';
+import type { RegexEngine } from '@csv-validator/core';
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type { Config } from './config.js';
 import type { Db } from './db/connection.js';
+import { SchemasRepo } from './db/schemas.repo.js';
 import { registerErrorHandling } from './errors.js';
+import { re2Engine } from './regex-re2.js';
+import { registerSchemaRoutes } from './routes/schemas.routes.js';
 import { registerSecurity } from './security.js';
 
 export interface AppDeps {
   config: Config;
   db: Db;
+  /** Defaults to RE2; tests may inject a lighter engine. */
+  regex?: RegexEngine;
+  now?: () => Date;
+  newId?: () => string;
   logger?: FastifyServerOptions['logger'];
 }
 
@@ -42,6 +50,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get('/api/health', async () => {
     db.prepare('SELECT 1').get();
     return { status: 'ok' };
+  });
+
+  registerSchemaRoutes(app, {
+    repo: new SchemasRepo(db),
+    regex: deps.regex ?? re2Engine,
+    now: deps.now ?? (() => new Date()),
+    newId: deps.newId ?? randomUUID,
   });
 
   return app;

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyServerOptions } from 'fastify';
-import { buildApp } from '../../src/app.js';
+import { buildApp, type AppDeps } from '../../src/app.js';
 import type { Config } from '../../src/config.js';
 import { openDatabase, type Db } from '../../src/db/connection.js';
 
@@ -27,6 +27,7 @@ export async function makeApp(
   options: {
     config?: Partial<Config>;
     logger?: FastifyServerOptions['logger'];
+    deps?: Partial<Omit<AppDeps, 'config' | 'db'>>;
     routes?: (app: FastifyInstance) => void;
   } = {},
 ): Promise<TestApp> {
@@ -34,6 +35,7 @@ export async function makeApp(
   const app = await buildApp({
     config: testConfig(options.config),
     db,
+    ...options.deps,
     ...(options.logger === undefined ? {} : { logger: options.logger }),
   });
   options.routes?.(app);
