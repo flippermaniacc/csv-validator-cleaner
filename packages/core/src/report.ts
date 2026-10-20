@@ -29,6 +29,10 @@ export interface ValidationReport {
   detectedDelimiter: Delimiter;
 }
 
+export interface RunReport extends ValidationReport {
+  sanitizedCells: number;
+}
+
 export interface ReportMeta {
   passthroughColumns: string[];
   detectedEncoding: DetectedEncoding;

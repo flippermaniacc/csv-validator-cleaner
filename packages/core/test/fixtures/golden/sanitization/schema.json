@@ -1,0 +1,9 @@
+{
+  "name": "Formulas",
+  "columns": [
+    { "name": "name", "type": "string" },
+    { "name": "qty", "type": "integer" },
+    { "name": "contact", "type": "email" },
+    { "name": "price", "type": "decimal" }
+  ]
+}

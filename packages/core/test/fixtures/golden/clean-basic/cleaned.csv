@@ -1,0 +1,4 @@
+id,notes,issued,amount,currency
+1,  keep me ,2024-03-01,10.50,USD
+2,"a, b",2024-03-02,7,EUR
+3,,2024-03-15,0.5,USD

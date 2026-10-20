@@ -16,14 +16,17 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.5",
+    "@vitest/coverage-v8": "^5.0.5",
     "dependency-cruiser": "^18.7.0",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
+    "fast-check": "^4.10.2",
     "prettier": "^3.9.10",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.0",

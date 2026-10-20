@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "fileError": {
+    "code": "PARSE_ERROR",
+    "message": "Unterminated quoted field (line 2)"
+  },
+  "detectedEncoding": "utf-8",
+  "detectedDelimiter": ","
+}

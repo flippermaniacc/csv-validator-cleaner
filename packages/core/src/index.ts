@@ -17,3 +17,4 @@ export * from './rules/range.js';
 export * from './process.js';
 export * from './report.js';
 export * from './unique.js';
+export * from './clean.js';

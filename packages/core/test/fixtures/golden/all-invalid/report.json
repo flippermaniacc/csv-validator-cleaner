@@ -1,0 +1,42 @@
+{
+  "status": "completed",
+  "report": {
+    "totalRows": 3,
+    "validRows": 0,
+    "invalidRows": 3,
+    "duplicateRowsDropped": 0,
+    "totalErrors": 3,
+    "errorCountsByCode": {
+      "REQUIRED": 1,
+      "INVALID_TYPE": 2
+    },
+    "truncated": false,
+    "errors": [
+      {
+        "row": 1,
+        "column": "id",
+        "code": "INVALID_TYPE",
+        "message": "Expected an integer within the safe integer range, got \"x\"",
+        "value": "x"
+      },
+      {
+        "row": 2,
+        "column": "id",
+        "code": "REQUIRED",
+        "message": "Value is required",
+        "value": ""
+      },
+      {
+        "row": 3,
+        "column": "id",
+        "code": "INVALID_TYPE",
+        "message": "Expected an integer within the safe integer range, got \"1.5\"",
+        "value": "1.5"
+      }
+    ],
+    "passthroughColumns": [],
+    "detectedEncoding": "utf-8",
+    "detectedDelimiter": ",",
+    "sanitizedCells": 0
+  }
+}

@@ -1,0 +1,4 @@
+name,qty,contact,memo,'=cmd,price
+'=1+1,-7,'=a@b.co,'+SUM(A1),'-x,-0.5
+'@user,+3,'+tag@b.co,safe,'@y,+1.5
+plain,5,c@d.co,'-,'=z,2

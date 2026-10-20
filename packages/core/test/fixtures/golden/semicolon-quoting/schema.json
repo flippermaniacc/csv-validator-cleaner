@@ -1,0 +1,7 @@
+{
+  "name": "Quoting",
+  "columns": [
+    { "name": "title", "type": "string" },
+    { "name": "n", "type": "integer" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "report": {
+    "totalRows": 3,
+    "validRows": 3,
+    "invalidRows": 0,
+    "duplicateRowsDropped": 0,
+    "totalErrors": 0,
+    "errorCountsByCode": {},
+    "truncated": false,
+    "errors": [],
+    "passthroughColumns": ["remark"],
+    "detectedEncoding": "utf-8",
+    "detectedDelimiter": ";",
+    "sanitizedCells": 0
+  }
+}

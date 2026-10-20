@@ -1,0 +1,7 @@
+{
+  "name": "Strict",
+  "columns": [
+    { "name": "id", "type": "integer", "required": true },
+    { "name": "n", "type": "string" }
+  ]
+}

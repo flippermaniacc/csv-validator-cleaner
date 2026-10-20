@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "fileError": {
+    "code": "MISSING_COLUMN",
+    "message": "Header is missing schema columns: \"email\""
+  },
+  "detectedEncoding": "utf-8",
+  "detectedDelimiter": ","
+}

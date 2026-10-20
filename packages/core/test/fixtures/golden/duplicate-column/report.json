@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "fileError": {
+    "code": "DUPLICATE_COLUMN",
+    "message": "Header repeats schema columns: \"id\""
+  },
+  "detectedEncoding": "utf-8",
+  "detectedDelimiter": ","
+}

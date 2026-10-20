@@ -1,0 +1,7 @@
+{
+  "name": "Mixed",
+  "columns": [
+    { "name": "a", "type": "string" },
+    { "name": "b", "type": "integer" }
+  ]
+}

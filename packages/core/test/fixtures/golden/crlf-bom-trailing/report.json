@@ -1,0 +1,27 @@
+{
+  "status": "completed",
+  "report": {
+    "totalRows": 3,
+    "validRows": 2,
+    "invalidRows": 1,
+    "duplicateRowsDropped": 0,
+    "totalErrors": 1,
+    "errorCountsByCode": {
+      "COLUMN_COUNT_MISMATCH": 1
+    },
+    "truncated": false,
+    "errors": [
+      {
+        "row": 2,
+        "column": null,
+        "code": "COLUMN_COUNT_MISMATCH",
+        "message": "Expected 2 fields, got 1",
+        "value": null
+      }
+    ],
+    "passthroughColumns": [],
+    "detectedEncoding": "utf-8",
+    "detectedDelimiter": ",",
+    "sanitizedCells": 0
+  }
+}

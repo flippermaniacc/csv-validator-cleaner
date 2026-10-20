@@ -1,0 +1,7 @@
+{
+  "name": "Need",
+  "columns": [
+    { "name": "id", "type": "integer" },
+    { "name": "email", "type": "email", "required": true }
+  ]
+}

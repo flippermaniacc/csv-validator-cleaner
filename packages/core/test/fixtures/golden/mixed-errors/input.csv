@@ -1,0 +1,8 @@
+id,email,code,placed,qty,currency,paid
+1,a@b.co,ABC,03/01/2024,5,USD,true
+2,,abc,13/45/2024,0,GBP,yes
+3,bad,XYZ,12/31/2019,101,EUR,false
+x,c@d.co,QQQ,01/02/2024,7,USD,TRUE
+1,e@f.co,DEF,02/03/2024,9,EUR,true
+5,g@h.co
+6,i@j.co,GHI,04/05/2024,50,USD,false,extra

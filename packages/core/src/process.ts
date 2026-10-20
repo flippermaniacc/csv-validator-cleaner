@@ -1,9 +1,15 @@
+import { serializeCleaned, type OutputColumn } from './clean.js';
 import { decodeBytes, type DetectedEncoding } from './decode.js';
 import { detectDelimiter, type Delimiter } from './delimiter.js';
 import type { FileError } from './errors.js';
 import { mapHeader } from './header.js';
 import { parseRecords } from './parse.js';
-import { MAX_STORED_ERRORS, ReportBuilder, type ValidationReport } from './report.js';
+import {
+  MAX_STORED_ERRORS,
+  ReportBuilder,
+  type RunReport,
+  type ValidationReport,
+} from './report.js';
 import type { RegexEngine } from './regex.js';
 import { checkDate } from './rules/date.js';
 import { createEnumRule } from './rules/enum.js';
@@ -21,12 +27,6 @@ export interface AnalyzeInput {
   schema: SchemaDefinition;
   regex: RegexEngine;
   maxStoredErrors?: number;
-}
-
-/** One output column in file order; `type` is null for pass-through columns. */
-export interface OutputColumn {
-  name: string;
-  type: ColumnType | null;
 }
 
 export type AnalysisResult =
@@ -200,4 +200,21 @@ function failed(
   detected: { detectedEncoding?: DetectedEncoding; detectedDelimiter?: Delimiter } = {},
 ): AnalysisResult {
   return { status: 'failed', fileError, ...detected };
+}
+
+export type ProcessResult =
+  | { status: 'completed'; report: RunReport; cleaned: Uint8Array }
+  | Extract<AnalysisResult, { status: 'failed' }>;
+
+/** Validates and cleans in one deterministic call: same bytes and schema give identical output (FR-17). */
+export function processCsv(input: AnalyzeInput): ProcessResult {
+  const analysis = analyzeCsv(input);
+  if (analysis.status === 'failed') return analysis;
+
+  const { bytes, sanitizedCells } = serializeCleaned(analysis.columns, analysis.cleanedRows);
+  return {
+    status: 'completed',
+    report: { ...analysis.report, sanitizedCells },
+    cleaned: bytes,
+  };
 }

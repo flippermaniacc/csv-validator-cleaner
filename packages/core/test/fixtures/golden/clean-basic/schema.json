@@ -1,0 +1,9 @@
+{
+  "name": "Invoices",
+  "columns": [
+    { "name": "id", "type": "integer", "required": true, "unique": true },
+    { "name": "issued", "type": "date", "dateFormat": "DD.MM.YYYY" },
+    { "name": "amount", "type": "decimal", "min": 0 },
+    { "name": "currency", "type": "string", "enum": ["USD", "EUR"] }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "status": "completed",
+  "report": {
+    "totalRows": 7,
+    "validRows": 1,
+    "invalidRows": 6,
+    "duplicateRowsDropped": 1,
+    "totalErrors": 13,
+    "errorCountsByCode": {
+      "COLUMN_COUNT_MISMATCH": 2,
+      "REQUIRED": 1,
+      "INVALID_TYPE": 3,
+      "INVALID_DATE": 1,
+      "PATTERN_MISMATCH": 1,
+      "NOT_IN_ENUM": 1,
+      "BELOW_MIN": 2,
+      "ABOVE_MAX": 1,
+      "NOT_UNIQUE": 1
+    },
+    "truncated": false,
+    "errors": [
+      {
+        "row": 2,
+        "column": "email",
+        "code": "REQUIRED",
+        "message": "Value is required",
+        "value": ""
+      },
+      {
+        "row": 2,
+        "column": "code",
+        "code": "PATTERN_MISMATCH",
+        "message": "Expected a value matching pattern \"[A-Z]{3}\", got \"abc\"",
+        "value": "abc"
+      },
+      {
+        "row": 2,
+        "column": "placed",
+        "code": "INVALID_DATE",
+        "message": "Expected MM/DD/YYYY or YYYY-MM-DD, got \"13/45/2024\"",
+        "value": "13/45/2024"
+      },
+      {
+        "row": 2,
+        "column": "qty",
+        "code": "BELOW_MIN",
+        "message": "Expected a value of at least 1, got 0",
+        "value": "0"
+      },
+      {
+        "row": 2,
+        "column": "currency",
+        "code": "NOT_IN_ENUM",
+        "message": "Expected one of [\"USD\", \"EUR\"], got \"GBP\"",
+        "value": "GBP"
+      },
+      {
+        "row": 2,
+        "column": "paid",
+        "code": "INVALID_TYPE",
+        "message": "Expected true or false, got \"yes\"",
+        "value": "yes"
+      },
+      {
+        "row": 3,
+        "column": "email",
+        "code": "INVALID_TYPE",
+        "message": "Expected an email address, got \"bad\"",
+        "value": "bad"
+      },
+      {
+        "row": 3,
+        "column": "placed",
+        "code": "BELOW_MIN",
+        "message": "Expected a date on or after 2020-01-01, got 2019-12-31",
+        "value": "12/31/2019"
+      },
+      {
+        "row": 3,
+        "column": "qty",
+        "code": "ABOVE_MAX",
+        "message": "Expected a value of at most 100, got 101",
+        "value": "101"
+      },
+      {
+        "row": 4,
+        "column": "id",
+        "code": "INVALID_TYPE",
+        "message": "Expected an integer within the safe integer range, got \"x\"",
+        "value": "x"
+      },
+      {
+        "row": 5,
+        "column": "id",
+        "code": "NOT_UNIQUE",
+        "message": "Duplicate value \"1\"; first seen in row 1",
+        "value": "1"
+      },
+      {
+        "row": 6,
+        "column": null,
+        "code": "COLUMN_COUNT_MISMATCH",
+        "message": "Expected 7 fields, got 2",
+        "value": null
+      },
+      {
+        "row": 7,
+        "column": null,
+        "code": "COLUMN_COUNT_MISMATCH",
+        "message": "Expected 7 fields, got 8",
+        "value": null
+      }
+    ],
+    "passthroughColumns": [],
+    "detectedEncoding": "utf-8",
+    "detectedDelimiter": ",",
+    "sanitizedCells": 0
+  }
+}

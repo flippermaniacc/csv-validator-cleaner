@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "fileError": {
+    "code": "FILE_EMPTY",
+    "message": "The file has no header row"
+  },
+  "detectedEncoding": "utf-8",
+  "detectedDelimiter": ","
+}
