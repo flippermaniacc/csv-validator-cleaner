@@ -1,6 +1,6 @@
 # 01 — Software Requirements Specification: CSV Validator & Cleaner
 
-Status: v0.2 (decisions from §7 finalized)
+Status: v0.3
 Depends on: `00-problem.md`
 
 Requirement keywords MUST, MUST NOT, SHOULD, MAY follow RFC 2119.
@@ -27,13 +27,13 @@ Out of scope (v1): authentication and multi-tenancy, `.xlsx` input, background j
 - **FR-1** The system MUST allow creating a schema with a unique `name` (case-insensitive, 1-100 chars after trimming) and an ordered list of one or more columns.
 - **FR-2** The system MUST allow listing, retrieving, updating, and deleting schemas.
 - **FR-3** Each column definition MUST have a `name` (non-empty, unique within the schema, case-sensitive) and a `type`. All other properties are optional and specified in §3.
-- **FR-4** The system MUST reject an invalid schema definition with an error identifying the offending column and property (for example `min` greater than `max`, a `pattern` that is not a valid regex, `dateFormat` on a non-date column).
+- **FR-4** The system MUST reject an invalid schema definition with an error identifying the offending column and property (for example `min` greater than `max`, a `pattern` that is not valid RE2 syntax or uses an unsupported feature, `dateFormat` on a non-date column).
 - **FR-5** Updating or deleting a schema MUST NOT alter or delete any existing Run or its snapshot (see FR-22).
 
 ### 2.2 Upload and parsing
 
 - **FR-6** The system MUST accept a CSV upload and a schema identifier in a single validation request.
-- **FR-7** The system MUST reject files larger than 10 MiB (10,485,760 bytes) with a size error, without parsing them.
+- **FR-7** The system MUST reject files larger than 10 MiB (10,485,760 bytes) with a size error (`FILE_TOO_LARGE`, HTTP `413`), without parsing them. This is a transport-level rejection: no Run is created. All other file-level failures (FR-8, FR-12, FR-14) create a Run with `status: "failed"`.
 - **FR-8** The system MUST reject empty files and files with no header row.
 - **FR-9** Encoding detection MUST, in order:
   1. UTF-16 if a UTF-16 BOM is present (LE or BE);
@@ -73,11 +73,11 @@ Out of scope (v1): authentication and multi-tenancy, `.xlsx` input, background j
 ### 2.5 Runs, history, persistence
 
 - **FR-22** Each validation request MUST create a persisted Run containing the data in §5.2, including a full snapshot of the schema as it was at execution time. A Run MUST remain complete and readable after its schema is changed or deleted.
-- **FR-23** The system MUST persist the Run's metadata, error summary, stored errors (capped per FR-26), and the generated cleaned CSV. The raw uploaded file MUST NOT be retained after the request completes, including on failure.
+- **FR-23** The system MUST persist the Run's metadata, error summary, stored errors (capped per FR-26), and the generated cleaned CSV (as a file on the local filesystem, FR-DB6). The raw uploaded file MUST NOT be retained after the request completes, including on failure.
 - **FR-24** The system MUST list Runs, newest first, with pagination, showing at least: id, created time, original filename, schema name (from the snapshot), status, row counts, and total error count.
 - **FR-25** The system MUST allow retrieving a Run's full report (paginated errors) and downloading its cleaned CSV. Downloading a Run with status `failed` or one that has no cleaned file MUST return a not-found style error.
 - **FR-26** A Run MUST store and expose at most **1000** errors (the first 1000 in the order of FR-19). It MUST additionally store the exact total error count, exact per-code counts, and a `truncated` flag that is true when total errors exceed 1000. Counts MUST NOT be derived from the stored (capped) list.
-- **FR-27** The system SHOULD allow deleting a Run (metadata, errors, and cleaned CSV together).
+- **FR-27** The system SHOULD allow deleting a Run (metadata, errors, and the cleaned CSV file together).
 
 ### 2.6 Web UI
 
@@ -88,7 +88,7 @@ Out of scope (v1): authentication and multi-tenancy, `.xlsx` input, background j
 ### 2.7 API
 
 - **FR-31** The API MUST expose the capabilities of FR-1 to FR-27 over HTTP with JSON bodies (multipart for upload), and MUST validate all request bodies against declared schemas, returning structured `4xx` errors for invalid input (for example `413` for oversize files, `404` for unknown ids, `422` for invalid schema definitions).
-- **FR-32** `packages/core` MUST contain all parsing, validation, and cleaning logic and MUST NOT depend on HTTP, the database, or the filesystem. The API and web packages MUST NOT reimplement rule logic.
+- **FR-32** `packages/core` MUST contain all parsing, validation, and cleaning logic and MUST NOT depend on HTTP, the database, the filesystem, or any native module. Regex support is provided by a `RegexEngine` interface (compile pattern, test string) defined in `core` and injected by the caller; `packages/api` injects an RE2-backed implementation. `core` MUST also export the Zod schema-definition validator and its inferred TypeScript types as the single source of truth for schema shape (FR-3, FR-4). The API and web packages MUST NOT reimplement rule logic, and `packages/web` MUST import from `core` using type-only imports.
 
 ## 3. Rule Specifications
 
@@ -129,8 +129,9 @@ A schema column has these properties:
 
 ### 3.4 `pattern`
 
-- **FR-P1** `pattern` is a regular expression in JavaScript (ECMAScript) syntax and MUST match the **entire** trimmed value (anchored implicitly). Failure emits `PATTERN_MISMATCH`.
-- **FR-P2** The schema MUST be rejected at creation/update if the pattern fails to compile. Patterns SHOULD be limited in length (≤ 500 chars) and the system MUST protect against catastrophic backtracking (for example by a per-cell evaluation guard); a guard trip emits `PATTERN_MISMATCH` with a message noting the guard, and MUST be recorded deterministically.
+- **FR-P1** `pattern` is a regular expression in **RE2 syntax**. Lookahead, lookbehind, and backreferences are **not supported** and MUST be rejected at schema save (FR-P2). The pattern MUST match the **entire** trimmed value: it is compiled as `^(?:<pattern>)$`. Failure emits `PATTERN_MISMATCH`.
+- **FR-P2** The schema MUST be rejected at creation/update if the pattern fails to compile under RE2 or exceeds 500 characters. The error MUST name the column and, where the engine reports it, the unsupported construct (for example "lookahead is not supported"). Because RE2 evaluates in time linear in the input, no additional backtracking guard is required. The schema builder UI SHOULD state the RE2 dialect next to the pattern input.
+- **FR-P3** Regex compilation and matching MUST go through the `RegexEngine` port defined by `packages/core` (FR-32). The pattern semantics of FR-P1 are those of the injected engine; the production engine is RE2.
 
 ### 3.5 `min` / `max`
 
@@ -215,28 +216,31 @@ A Run that fails at file level has `status: "failed"`, no row errors, and one er
 
 ### 5.2 Run record
 
-`id`, `createdAt`, `originalFilename`, `fileSizeBytes`, `fileSha256`, `schemaSnapshot` (full schema JSON, including the schema's `id` and name at that time), `status`, the report summary fields from FR-ER4, the capped `errors`, and the cleaned CSV content.
+`id`, `createdAt`, `originalFilename`, `fileSizeBytes`, `fileSha256`, `schemaSnapshot` (full schema JSON, including the schema's `id` and name at that time), `status`, the report summary fields from FR-ER4, the capped `errors`, and the path of the cleaned CSV file (`cleanedPath`, relative to the data directory; null if none).
 
 - **FR-DB1** Storage MUST be SQLite accessed through `better-sqlite3`.
 - **FR-DB2** The Run's snapshot MUST NOT be a foreign key that cascades; deleting the schema MUST NOT affect Runs.
-- **FR-DB3** A Run MUST be written atomically (all or nothing); a crash MUST NOT leave a partial Run visible.
+- **FR-DB3** A Run MUST be written atomically (all or nothing); a crash MUST NOT leave a partial Run visible. The cleaned CSV file MUST be written to a temporary name and renamed into place before the database row is committed; an orphaned cleaned file (crash between rename and commit) MUST be removed by a startup sweep.
 - **FR-DB4** The raw upload MUST be stored only in temporary memory or a temp file, and MUST be removed on both success and failure paths.
 - **FR-DB5** Schema changes (migrations) MUST be versioned and applied at startup.
+- **FR-DB6** Cleaned CSVs MUST be stored on the local filesystem at `<dataDir>/cleaned/<runId>.csv` (default `dataDir` is `./data`), not as database BLOBs. The database MUST hold only the relative path. Deleting a Run MUST delete its file.
+- **FR-DB7** SQLite MUST run in WAL mode with foreign keys enabled.
 
 ## 6. Non-Functional Requirements
 
-- **NFR-1 Performance** A 10 MiB file MUST complete validation and cleaning in ≤ 5 s at p95 on a 2020-or-newer laptop-class machine, for a file with a typical mix of rule types, including a worst-case in which every row has an error.
+- **NFR-1 Performance** A 10 MiB file MUST complete validation and cleaning in ≤ 5 s at p95 on a 2020-or-newer laptop-class machine, for a file with a typical mix of rule types, including a worst-case in which every row has an error. Processing runs inline in the request (no worker threads in v1); concurrent requests may be delayed while a file is processed.
 - **NFR-2 Memory** The server SHOULD stay under 512 MB resident while processing a 10 MiB file; processing MUST NOT keep an unbounded error list in memory (stop storing after 1000, continue counting).
 - **NFR-3 Determinism** Same bytes + same snapshot → identical report and identical cleaned bytes, independent of locale, timezone, and time of day. Core MUST NOT call the clock or use randomness.
 - **NFR-4 Idempotence** Feeding a cleaned CSV back through the same schema MUST yield zero errors, with the exception that cells sanitized by FR-21 are subject to the schema's rules like any other value (see §7, decision 1).
-- **NFR-5 Purity** `packages/core` exports pure functions and takes bytes/strings plus a schema, returning plain data. It has no I/O.
+- **NFR-5 Purity** `packages/core` exports pure functions and takes bytes, a schema, and a `RegexEngine`, returning plain data. It has no I/O, no clock, no randomness, and no native dependencies; identifiers and timestamps are assigned by the caller.
 - **NFR-6 Testability** Core line coverage MUST be ≥ 90%, and each error code MUST have at least one test. API tests MUST run against an in-memory SQLite database.
 - **NFR-7 Type safety** The repo MUST compile with TypeScript `strict`, shared types MUST be imported from `core` and not duplicated.
-- **NFR-8 Security** The API MUST enforce the size limit while streaming (not after buffering), MUST bind to `127.0.0.1` by default, and MUST apply the FR-21 sanitization to every cleaned download.
+- **NFR-8 Security** The API MUST enforce the size limit while streaming (not after buffering), MUST bind to `127.0.0.1` by default, and MUST apply the FR-21 sanitization to every cleaned download. See NFR-13 for browser-origin hardening.
 - **NFR-9 Privacy** Logs MUST NOT contain cell values or file content. Only ids, sizes, counts, durations, and error codes may be logged.
 - **NFR-10 Usability** The UI SHOULD be usable at a 1280 px wide viewport and keyboard-accessible for the upload and download flow. Displayed error tables SHOULD paginate.
-- **NFR-11 Portability** Runs on Node.js LTS on macOS and Linux with `npm install && npm test` as the only setup.
+- **NFR-11 Portability** Runs on Node.js LTS on macOS and Linux with `npm install && npm test` as the only setup. The `re2` native module MUST install from a prebuilt binary on these platforms.
 - **NFR-12 Observability** Each request SHOULD carry a request id that is included in logs and in error responses.
+- **NFR-13 Localhost hardening** The API MUST send CORS headers only for the configured web SPA origin (never `*`), MUST reject requests whose `Host` header is not an expected loopback host/port with `403`, MUST reject state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`) whose `Origin` header is present and not the configured SPA origin with `403`, and MUST serve cleaned CSV downloads with `X-Content-Type-Options: nosniff` and `Content-Disposition: attachment` (with a sanitized filename).
 
 ## 7. Finalized Decisions
 
@@ -246,9 +250,12 @@ Confirmed by the Lead Engineer; each is binding for v1.
 2. **Unique claim** (FR-U4). The first occurrence claims the key regardless of errors in other columns, which keeps column rules decoupled and deterministic.
 3. **Extra columns are preserved** (FR-12, FR-20, FR-21a). Cleaned output keeps all original columns in original order; only schema columns are validated and cleaned. Pass-through values are untouched except for FR-21 sanitization. A missing schema column still fails the Run (`MISSING_COLUMN`), and a duplicated schema column name fails it with `DUPLICATE_COLUMN`.
 4. **No casing normalization in v1.** May return later as an optional `case` column property.
-5. **Retention.** Runs are kept in SQLite until explicitly deleted (FR-27); no automatic expiry.
+5. **Retention.** Run records (in SQLite) and their cleaned CSV files (on disk) are kept until explicitly deleted (FR-27); no automatic expiry.
 6. **`windows-1251` fallback.** The detected encoding is always recorded in the Run (FR-9), so a misdetected legacy encoding is visible. A manual encoding override is a candidate for v1.1.
 7. **Wrong field count** is a row error (FR-13), never repaired.
+8. **Regex dialect.** RE2 via an injected `RegexEngine` (FR-P1 to FR-P3); lookaround and backreferences are rejected at schema save.
+9. **Localhost hardening** is a requirement (NFR-13), since an unauthenticated local API is reachable from any web page in the user's browser.
+10. **Cleaned CSVs live on the filesystem**, not in SQLite (FR-DB6).
 
 ## 8. Acceptance Criteria
 
@@ -273,7 +280,8 @@ Each AC is testable and traces to requirements.
 - **AC-12** (FR-T3) For `decimal`: `4.2`, `-0.5`, `.5`, `10` are valid; `4,2`, `1e3`, `5.`, `abc` yield `INVALID_TYPE`.
 - **AC-13** (FR-T4) For `boolean`: `true`, `FALSE`, `True` are valid; `yes`, `1`, `0` yield `INVALID_TYPE`.
 - **AC-14** (FR-T5) For `email`: `a@b.co` is valid; `a@b`, `a@@b.co`, `a b@c.co`, and `@b.co` yield `INVALID_TYPE`.
-- **AC-15** (FR-P1) With `pattern: "[A-Z]{3}"`, `ABC` is valid; `ABCD` and `abc` yield `PATTERN_MISMATCH` (full-value match).
+- **AC-15** (FR-P1) With `pattern: "[A-Z]{3}"`, `ABC` is valid; `ABCD` and `abc` yield `PATTERN_MISMATCH` (full-value match). A pattern using alternation such as `a|b` matches only the whole value `a` or `b`, not `ab` or `xb`.
+- **AC-15a** (FR-P2, FR-4) Creating a schema with the pattern `^(?!0)\d+$` (lookahead), `(a)\1` (backreference), or `(?<=x)y` (lookbehind) fails with an error naming the column, `pattern`, and the unsupported construct; a pattern longer than 500 characters also fails.
 - **AC-16** (FR-M1, FR-M2, FR-M3) `min: 1, max: 10` on `integer` accepts `1` and `10`, rejects `0` (`BELOW_MIN`) and `11` (`ABOVE_MAX`); on `string`, bounds apply to character length; on `date`, to the calendar date.
 - **AC-17** (FR-E1) With `enum: ["USD","EUR"]`, `USD` is valid; `usd` and `GBP` yield `NOT_IN_ENUM`.
 - **AC-18** (FR-D1-FR-D3) Under `DD.MM.YYYY`: `01.03.2024` is valid; `1.3.2024`, `31.04.2024`, `29.02.2023`, `2024-13-01`, and `01/03/2024` yield `INVALID_DATE`. Under `MM/DD/YYYY`: `03/01/2024` is read as March 1.
@@ -297,22 +305,24 @@ Each AC is testable and traces to requirements.
 - **AC-31** (FR-ER2) A 5,000-character offending value is stored truncated to 200 characters.
 
 ### Persistence and history
-- **AC-32** (FR-22, FR-23) After a validation, the Run is retrievable with its snapshot, summary, stored errors, and a downloadable cleaned CSV byte-identical to the one produced at execution time.
+- **AC-32** (FR-22, FR-23) After a validation, the Run is retrievable with its snapshot, summary, stored errors, and a downloadable cleaned CSV byte-identical to the one produced at execution time (read from `<dataDir>/cleaned/<runId>.csv`).
 - **AC-33** (FR-DB4) After success and after failure (for example `PARSE_ERROR`), no raw upload file remains in the temp directory.
 - **AC-34** (FR-24) History lists Runs newest first, with pagination, each row showing filename, schema name from the snapshot, status, counts, and time.
 - **AC-35** (FR-25) Downloading the cleaned CSV of a `failed` Run returns `404`.
-- **AC-36** (FR-DB3) If persistence fails mid-write (simulated), no partial Run appears in history.
+- **AC-36** (FR-DB3) If persistence fails mid-write (simulated), no partial Run appears in history, and the startup sweep removes any orphaned `cleaned/<id>.csv` that has no Run row.
+- **AC-36a** (FR-27, FR-DB6) Deleting a Run removes its database rows and its cleaned file; the database holds a relative path only and no CSV content; WAL mode is enabled.
 
 ### API and UI
 - **AC-37** (FR-31) Invalid bodies return `4xx` with a structured error; unknown ids return `404`; oversize uploads return `413`.
 - **AC-38** (FR-28, FR-29) In the UI, a user can create a schema, upload a CSV, see the summary and error table, and download the cleaned file; when `truncated` is true the notice shows the exact total.
-- **AC-39** (FR-32, NFR-5) `packages/core` has no import of `fastify`, `better-sqlite3`, `node:fs`, `node:http`, or React (enforced by a lint rule or dependency check).
+- **AC-39** (FR-32, NFR-5) `packages/core` has no import of `fastify`, `better-sqlite3`, `re2`, `node:fs`, `node:http`, or React, and `packages/web` imports from `core` with type-only imports (enforced by a lint rule or dependency check). `core` tests run with a non-RE2 `RegexEngine`.
 
 ### Non-functional
 - **AC-40** (NFR-1) A generated 10 MiB file (all-error worst case included) completes in ≤ 5 s at p95 over 20 runs on the reference machine.
 - **AC-41** (NFR-2) Processing a 10 MiB all-error file never holds more than 1000 error objects in memory, while counts stay exact.
 - **AC-42** (NFR-6) Core coverage ≥ 90% and every code in §4.3 is exercised by at least one test.
 - **AC-43** (NFR-8, NFR-9) The server listens on `127.0.0.1` by default, and a test confirms no log line contains a known cell value after a validation.
+- **AC-44** (NFR-13) A request with a foreign `Host` header, or a `POST` with `Origin: https://evil.example`, returns `403`; a preflight from the SPA origin succeeds and from any other origin gets no CORS allow headers; a download response carries `X-Content-Type-Options: nosniff` and `Content-Disposition: attachment`.
 
 ## 9. Traceability Summary
 
@@ -325,4 +335,4 @@ Each AC is testable and traces to requirements.
 | Report | §4, FR-26 | AC-28 to AC-31 |
 | Persistence/history | FR-22 to FR-27, FR-DB* | AC-32 to AC-36 |
 | API/UI | FR-28 to FR-32 | AC-37 to AC-39 |
-| NFR | NFR-1 to NFR-12 | AC-40 to AC-43 |
+| NFR | NFR-1 to NFR-13 | AC-40 to AC-44 |
