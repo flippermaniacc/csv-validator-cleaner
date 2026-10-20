@@ -23,7 +23,7 @@ export function isValidCalendarDate(year: number, month: number, day: number): b
     Number.isInteger(year) &&
     Number.isInteger(month) &&
     Number.isInteger(day) &&
-    year >= 0 &&
+    year >= 1 &&
     year <= 9999 &&
     month >= 1 &&
     month <= 12 &&

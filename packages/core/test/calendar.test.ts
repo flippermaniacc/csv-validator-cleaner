@@ -26,6 +26,7 @@ describe('calendar helpers', () => {
     expect(isValidCalendarDate(2024, 0, 1)).toBe(false);
     expect(isValidCalendarDate(2024, 1, 0)).toBe(false);
     expect(isValidCalendarDate(2024, 1.5, 1)).toBe(false);
+    expect(isValidCalendarDate(0, 1, 1)).toBe(false);
   });
 
   it('parses strict YYYY-MM-DD only', () => {

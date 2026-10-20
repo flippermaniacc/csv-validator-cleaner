@@ -10,3 +10,7 @@ export * from './parse.js';
 export * from './rules/issue.js';
 export * from './rules/required.js';
 export * from './rules/types.js';
+export * from './rules/date.js';
+export * from './rules/enum.js';
+export * from './rules/pattern.js';
+export * from './rules/range.js';
