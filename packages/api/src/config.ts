@@ -14,8 +14,9 @@ export interface Config {
   allowedHosts: string[];
 }
 
-// packages/api/{src,dist}/config.js -> packages/web/dist
+// packages/api/{src,dist}/config.js -> <repo>/packages/web/dist and <repo>/data, whatever the cwd
 const DEFAULT_WEB_DIST = fileURLToPath(new URL('../../web/dist', import.meta.url));
+const DEFAULT_DATA_DIR = fileURLToPath(new URL('../../../data', import.meta.url));
 
 export const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 
@@ -27,7 +28,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     host: env['HOST'] ?? '127.0.0.1',
     port,
-    dataDir: resolve(env['DATA_DIR'] ?? './data'),
+    dataDir: resolve(env['DATA_DIR'] ?? DEFAULT_DATA_DIR),
     webOrigin: env['WEB_ORIGIN'] ?? 'http://localhost:5173',
     webDist: resolve(env['WEB_DIST'] ?? DEFAULT_WEB_DIST),
     allowedHosts: (env['ALLOWED_HOSTS'] ?? '')

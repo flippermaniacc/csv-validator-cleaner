@@ -19,8 +19,16 @@ export default tseslint.config(
   tseslint.configs.recommended,
   {
     // Plain JS tooling files (this config, dependency-cruiser) run under Node.
-    files: ['**/*.{js,cjs}'],
-    languageOptions: { globals: { module: 'readonly', require: 'readonly' } },
+    files: ['**/*.{js,cjs,mjs}'],
+    languageOptions: {
+      globals: {
+        module: 'readonly',
+        require: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+      },
+    },
   },
   {
     // core: pure library. No I/O, no native modules, no HTTP/DB/UI, and no

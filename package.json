@@ -19,12 +19,15 @@
     "build": "tsc -b && npm run build -w @csv-validator/web",
     "test:coverage": "vitest run --coverage",
     "dev:api": "npm run dev -w @csv-validator/api",
-    "dev:web": "npm run dev -w @csv-validator/web"
+    "dev:web": "npm run dev -w @csv-validator/web",
+    "start": "node scripts/start.mjs",
+    "dev": "concurrently --kill-others --names api,web --prefix-colors blue,green \"npm:dev:api\" \"npm:dev:web\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.5",
     "@vitest/coverage-v8": "^5.0.5",
+    "concurrently": "^10.0.6",
     "dependency-cruiser": "^18.7.0",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",

@@ -8,6 +8,9 @@
   --accent-text: #ffffff;
   --danger: #b3261e;
   --danger-bg: #fdecea;
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --warn-bg: #fff8e1;
   --focus: #1b5fd1;
   color-scheme: light dark;
 }
@@ -23,6 +26,9 @@
     --accent-text: #0b1220;
     --danger: #ff8a80;
     --danger-bg: #3a1c1a;
+    --ok: #56d364;
+    --warn: #e3b341;
+    --warn-bg: #2d2411;
     --focus: #6ea0ff;
   }
 }
@@ -299,4 +305,120 @@ textarea[aria-invalid='true'] {
   .checks {
     padding-top: 0;
   }
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge.valid {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.badge.errors {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.badge.failed {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.notice.warning {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: var(--text);
+}
+
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dropzone.dragging {
+  border-color: var(--accent);
+}
+
+.dropzone label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+}
+
+.card dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.card dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 650;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0;
+}
+
+.filters button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+
+.pager span {
+  margin-right: auto;
+  color: var(--muted);
+}
+
+td.value {
+  max-width: 16rem;
+  overflow-wrap: anywhere;
+}
+
+.snapshot {
+  margin: 1.5rem 0;
+}
+
+.danger-zone {
+  margin-top: 2rem;
 }

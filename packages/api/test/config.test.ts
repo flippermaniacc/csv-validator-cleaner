@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { isLoopbackHost, loadConfig } from '../src/config.js';
 
@@ -7,7 +8,7 @@ describe('loadConfig', () => {
     expect(loadConfig({})).toEqual({
       host: '127.0.0.1',
       port: 3001,
-      dataDir: resolve('./data'),
+      dataDir: resolve(fileURLToPath(new URL('../../../data', import.meta.url))),
       webOrigin: 'http://localhost:5173',
       webDist: expect.stringMatching(/packages[/\\]web[/\\]dist$/),
       allowedHosts: [],
