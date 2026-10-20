@@ -1,6 +1,6 @@
 # 02 — System Design: CSV Validator & Cleaner
 
-Status: Draft v0.1
+Status: Draft v0.2
 Depends on: `00-problem.md`, `01-srs.md` (v0.3)
 
 This document describes *how* the requirements in the SRS are met. Requirement IDs are cited as (FR-n / NFR-n / AC-n). Where the design clarifies or extends the SRS, it says so explicitly (§11).
@@ -473,17 +473,123 @@ Items where this design interprets or refines the SRS (all consistent with it; f
 5. **Errors are stored in a table** rather than a blob (D-9). The SRS only requires the cap and exact counts.
 6. **Defensive re-validation** of the stored schema definition happens before each run, so a hand-edited database row cannot crash `core`.
 
-## 12. Implementation Increments (preview)
+## 12. Implementation & Commit Roadmap
 
-Each increment is test-first and ends with a green `npm test`, a suggested Conventional Commit message, and no commits made by the assistant.
+Work proceeds **one milestone at a time**, test-first. The assistant implements the code and tests and runs the checks; the Lead Engineer reviews the diff and records every version-control change manually.
 
-1. Workspace scaffolding: tsconfig, Vitest workspace, ESLint boundaries, dependency-cruiser, CI script.
-2. `core`: schema definition (Zod) + `validateSchemaDefinition` + `RegexEngine` port.
-3. `core`: decode + delimiter + parser spike (fixtures for AC-5 to AC-9).
-4. `core`: rules (types, date, pattern, enum, range, required) with unit tests.
-5. `core`: `processCsv` pipeline: unique, report accumulator, cleaner, sanitizer; golden and property tests.
-6. `api`: config, security hooks, RE2 adapter, DB migrations, repositories.
-7. `api`: schema routes, then validation routes with file store and atomic persistence.
-8. `api`: history, errors, download, delete; fault-injection tests.
-9. `web`: client + schema editor, then validate flow, report viewer, history.
-10. Performance benchmark (AC-40, AC-41) and hardening pass.
+### 12.1 Protocol
+
+1. A milestone starts only after the explicit instruction "Approved, proceed to Milestone N".
+2. **Definition of done.** Before stopping, all of these pass in the terminal: `npm run typecheck`, `npm run lint` (includes the boundary rules of §1.1), `npm run format:check`, `npm test`, and `npm run build` once packages have build output.
+3. The assistant then stops and hands back: a summary, the command output, any deviation from this plan, and the suggested Conventional Commit message.
+4. The assistant never runs git write operations (staging, committing, pushing); it only suggests the commit message.
+5. A milestone only touches the files listed for it. If a milestone exposes a spec problem, the assistant stops and asks instead of silently changing `docs/`.
+
+### 12.2 Milestones
+
+#### Phase A: Foundation
+
+**M1. Workspace scaffolding**
+- *Create:* root `package.json` (workspaces; scripts `typecheck`, `lint`, `format`, `format:check`, `test`, `build`; `engines.node >=22.13.0`), `tsconfig.base.json`, `tsconfig.json` (project references), `vitest.workspace.ts`, `eslint.config.js`, `.dependency-cruiser.cjs`, `.nvmrc` (22), `.prettierrc.json`, `.prettierignore`, `.gitignore` (`node_modules`, `dist`, `data/`), `.editorconfig`, `README.md`. Each package: `package.json`, `tsconfig.json`, stub `src/index.ts`, one trivial test.
+- *Boundary rules:* `core` bans `fastify`, `better-sqlite3`, `re2`, `react`, and `node:*`; it also bans `Date`, `Math.random`, and `Intl` (§3.3). `web` allows only type-only imports from `core`.
+- *Verifies:* AC-39 foundations; deliberate-violation fixtures show lint fails on a banned import (run once by hand and reported).
+- *Commit:* `chore: scaffold npm workspaces monorepo with strict TS, Prettier and boundary lint`
+
+**M2. Core: schema definition and regex port**
+- *Create:* `core/src/schema/definition.ts` (Zod and inferred types), `schema/validate.ts` (`validateSchemaDefinition`), `regex.ts` (`RegexEngine`, `CompiledPattern`, `RegexCompileError`), `core/test/helpers/native-regex-engine.ts` (test fake), `errors.ts` (SRS §4.3 code catalog as a typed const).
+- *Rules checked:* unique column names; `min <= max`; non-empty `enum`; `dateFormat` only on `date`; `pattern` only on `string`/`email`; pattern length ≤ 500; a pattern that fails to compile reports column and construct.
+- *Tests:* unit tests for every rejection path.
+- *Verifies:* AC-2, AC-15a (core level, fake engine rejecting lookaround), validity half of AC-1.
+- *Commit:* `feat(core): add Zod schema definition, validation and RegexEngine port`
+
+#### Phase B: Core pipeline
+
+**M3. Core: decoding and delimiter detection**
+- *Create:* `core/src/decode.ts`, `core/src/delimiter.ts`; fixtures for UTF-8, UTF-8 with BOM, UTF-16 LE/BE with BOM, windows-1251.
+- *First step:* confirm Node 22's `TextDecoder` supports `windows-1251` and UTF-16; if not, stop and report before choosing a fallback.
+- *Tests:* BOM stripping; fatal-UTF-8 fallback; quoted `;` in the header not counted; tie and single column default to `,`; empty input.
+- *Verifies:* AC-5 (decode half), AC-6.
+- *Commit:* `feat(core): add encoding detection and delimiter sniffing`
+
+**M4. Core: CSV parsing and header mapping**
+- *Create:* `core/src/parse.ts` (`parseRecords` boundary), `core/src/header.ts` (trim, exact match, `MISSING_COLUMN`, `DUPLICATE_COLUMN`, pass-through set, index map).
+- *Spike first:* run `csv-parse/sync` against the AC-7 fixtures (doubled quotes, embedded newlines/commas, `\r`, `\r\n`, `\n`, trailing blank line, ragged rows). On failure, use a small hand-written RFC 4180 state machine behind the same function and report why (resolves D-12).
+- *Tests:* parsing edge cases; header mapping including a 25-column file with a 3-column schema.
+- *Verifies:* AC-7, AC-8, parse half of AC-9.
+- *Commit:* `feat(core): add RFC 4180 record parsing and header mapping`
+
+**M5. Core: required and scalar type rules**
+- *Create:* `core/src/rules/required.ts`, `rules/types.ts` (string, integer, decimal, boolean, email), each a pure `(trimmed) => ok | issue`.
+- *Tests:* table-driven cases taken from the AC bullets, including the `Number.MAX_SAFE_INTEGER` edge, `+3`, `007`, `.5`.
+- *Verifies:* AC-10 (the `unique` skip is completed in M7), AC-11, AC-12, AC-13, AC-14.
+- *Commit:* `feat(core): add required and scalar type rules`
+
+**M6. Core: date, pattern, enum and range rules**
+- *Create:* `rules/date.ts` (four strict parsers, calendar-validity arithmetic, canonical `YYYY-MM-DD` accepted in every date column), `rules/pattern.ts` (`^(?:…)$` via the injected engine), `rules/enum.ts`, `rules/range.ts` (numeric, string length by code points, date).
+- *Tests:* leap years; 31 April; unpadded values; `MM/DD` vs `DD/MM`; alternation full-match (`a|b`); enum numeric vs text comparison.
+- *Verifies:* AC-15, AC-16, AC-17, AC-18, AC-19 (rule-level half).
+- *Commit:* `feat(core): add date, pattern, enum and range rules`
+
+**M7. Core: validation pipeline, uniqueness and report**
+- *Create:* `core/src/unique.ts`, `report.ts` (exact counts plus capped error list), `process.ts` (compiled-schema closures, single row loop, FR-19 ordering, file-level failures); cleaned output is still a stub.
+- *Tests:* AC-20 including date-collision uniqueness; a fixture documenting that a type failure does not claim its unique key (§11 item 2); invariants `valid + invalid = total` and `Σ counts = total`; a 5,000-error file against the 1000 cap and the exact-1000 case (`truncated = false`); `value` truncated to 200 characters.
+- *Verifies:* AC-9 (full), AC-10 (unique skip), AC-20, AC-28, AC-29, AC-30, AC-31.
+- *Commit:* `feat(core): add single-pass validation pipeline with exact error accounting`
+
+**M8. Core: cleaning, sanitization, goldens and properties**
+- *Create:* `core/src/clean.ts` (original column order, pass-through untouched, quoting, `\n`, UTF-8 encode), the FR-21 sanitizer, final `processCsv` assembly; golden fixtures (`*.csv` in, `*.cleaned.csv` and `*.report.json` out); a `fast-check` determinism and idempotence suite; a meta-test that every SRS error code is produced by at least one fixture.
+- *Tests:* formula prefixes on string, email, and pass-through columns but not on integer/decimal; header-only output when all rows are invalid; the 25-column pass-through case.
+- *Verifies:* AC-19 (cleaned half), AC-21, AC-21a, AC-22, AC-23, AC-24, AC-25, AC-26, AC-27, AC-42, and core coverage ≥ 90% (NFR-6).
+- *Commit:* `feat(core): add deterministic cleaning, sanitization and golden tests`
+
+#### Phase C: API
+
+**M9. API foundation**
+- *Create:* `api/src/config.ts`, `app.ts` (`buildApp(deps)`), `main.ts`, `errors.ts` (envelope and request IDs), `security.ts` (Host/Origin/CORS/download headers), `regex-re2.ts`, `db/connection.ts` (WAL, pragmas, migration runner), `db/migrations/001_init.sql`, `GET /health`.
+- *First step:* install `re2` and report whether it came from a prebuilt binary on this machine (NFR-11).
+- *Tests:* RE2 contract test (same pattern suite as the fake engine, plus lookahead/lookbehind/backreference rejection with construct names); migrations apply once; foreign `Host` and `POST` `Origin` rejected with `403`; CORS preflight; a logging test that no cell values appear in logs.
+- *Verifies:* AC-15a (real engine), AC-43, AC-44, FR-DB1, FR-DB5, FR-DB7.
+- *Commit:* `feat(api): add Fastify app skeleton, SQLite migrations, RE2 engine and localhost hardening`
+
+**M10. API: schema management**
+- *Create:* `db/schemas.repo.ts`, `routes/schemas.routes.ts`.
+- *Tests:* CRUD; case-insensitive name conflict → `409`; `422` with issue paths for invalid definitions; `404`; ID format validation.
+- *Verifies:* AC-1, AC-2 (via HTTP), AC-37 (schema part).
+- *Commit:* `feat(api): add schema CRUD endpoints`
+
+**M11. API: validation run and persistence**
+- *Create:* `storage/cleaned-files.ts` (temp, fsync, rename, delete, startup sweep), `db/runs.repo.ts`, `services/validation.service.ts`, `routes/validations.routes.ts` with `POST /validations`.
+- *Tests:* happy-path multipart run; `413` at 10,485,761 bytes vs accepted at 10,485,760; failed Runs (`MISSING_COLUMN`, `PARSE_ERROR`) persist with no file; raw upload leaves no file in temp; stored cleaned file is byte-identical to `core`'s output; snapshot stored.
+- *Verifies:* AC-4, AC-32, AC-33, AC-37 (upload part), FR-22, FR-23, FR-DB3, FR-DB4, FR-DB6.
+- *Commit:* `feat(api): add validation endpoint with snapshot and atomic cleaned-file persistence`
+
+**M12. API: history, report, download, delete, fault injection**
+- *Create:* remaining routes (`GET /validations`, `/:id`, `/:id/errors`, `/:id/cleaned`, `DELETE`), keyset pagination, startup sweep wiring.
+- *Tests:* history order and pagination; error pagination and `?code=` filter; download headers; `404` for failed Runs; delete removes rows and file; editing then deleting a schema leaves the Run intact; fault injection (a throwing repository leaves no partial Run and no orphan; the sweep clears a planted orphan).
+- *Verifies:* AC-3, AC-34, AC-35, AC-36, AC-36a, AC-37 (full), FR-24 to FR-27.
+- *Commit:* `feat(api): add run history, error paging, download and deletion with fault-injection tests`
+
+#### Phase D: Web
+
+**M13. Web: scaffold, API client, schema management UI**
+- *Create:* `web/vite.config.ts` (dev proxy), `index.html`, `main.tsx`, `App.tsx`, `api/client.ts` (types imported from `core` with `import type`), `pages/Schemas.tsx`, `pages/SchemaEditor.tsx`, `components/ColumnRuleForm.tsx` (RE2 hint, inline `422` issues); `@fastify/static` wiring in `api` to serve `web/dist`.
+- *Tests:* Testing Library tests for the editor (add column, show server issues); lint check that `web` has no runtime imports from `core`.
+- *Verifies:* FR-28 (schema part), FR-30, AC-39 (web side).
+- *Commit:* `feat(web): add SPA scaffold, typed API client and schema builder`
+
+**M14. Web: validate flow, report viewer, history**
+- *Create:* `pages/Validate.tsx`, `pages/RunDetail.tsx`, `pages/History.tsx`, `components/ErrorTable.tsx`, `SummaryCards.tsx`, `TruncationNotice.tsx`.
+- *Tests:* happy path against a stubbed API (upload → summary → error table → download link); truncation notice shows the exact total; history delete.
+- *Verifies:* AC-38, FR-28, FR-29.
+- *Commit:* `feat(web): add validation flow, report viewer and history`
+
+#### Phase E: Hardening
+
+**M15. Benchmarks, end-to-end smoke test and docs**
+- *Create:* `core/test/fixtures/gen/` generators, `scripts/bench.ts` (`npm run bench`: 10 MiB typical and all-error files, 20 runs, p95 and peak memory), an end-to-end smoke script (start API with built SPA, run one upload over HTTP), README usage and architecture sections.
+- *Verifies:* AC-40, AC-41, NFR-1, NFR-2. If p95 exceeds 5 s, stop and bring the profile before optimizing.
+- *Commit:* `perf: add benchmarks and end-to-end smoke test; docs: add usage guide`
+
+### 12.3 Coverage check
+
+Every acceptance criterion AC-1 to AC-44 (including AC-15a, AC-21a, AC-36a) is assigned to at least one milestone. AC-39 is established in M1 and re-verified in M9 and M13; the full-system criteria AC-38, AC-40, and AC-41 land in M14 and M15.
