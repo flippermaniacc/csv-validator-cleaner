@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "paths": { "@csv-validator/core": ["../packages/core/src/index.ts"] }
+  },
+  "include": ["bench.ts"]
+}
