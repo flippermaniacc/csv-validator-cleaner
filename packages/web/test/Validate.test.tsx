@@ -16,7 +16,7 @@ function setup(overrides = {}) {
   return api;
 }
 
-describe('Validate page (FR-28)', () => {
+describe('Validate page (FR-28, AC-38)', () => {
   it('offers the schemas, preselecting the first', async () => {
     renderApp(setup(), '/validate');
     const select = await screen.findByLabelText('Schema');

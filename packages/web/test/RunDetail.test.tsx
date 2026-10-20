@@ -18,7 +18,7 @@ function withErrors(overrides = {}) {
   return api;
 }
 
-describe('RunDetail: summary (FR-25)', () => {
+describe('RunDetail: summary (FR-25, AC-38)', () => {
   it('shows the file, schema, result and the exact counts', async () => {
     open(withErrors());
     expect(await screen.findByRole('heading', { name: 'invoices.csv' })).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe('RunDetail: summary (FR-25)', () => {
   });
 });
 
-describe('RunDetail: download', () => {
+describe('RunDetail: download (AC-38)', () => {
   it('links to the cleaned CSV as a download', async () => {
     open(withErrors());
     const link = await screen.findByRole('link', { name: 'Download cleaned CSV' });
@@ -242,7 +242,7 @@ describe('RunDetail: errors (FR-25, FR-29)', () => {
   });
 });
 
-describe('RunDetail: truncation notice (FR-29, AC-29)', () => {
+describe('RunDetail: truncation notice (FR-29, AC-29, AC-38)', () => {
   it('shows the exact total and how many are listed when a run is truncated', async () => {
     const api = withErrors({
       totalErrors: 1500,

@@ -20,6 +20,13 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
   };
 }
 
+const created: TestApp[] = [];
+
+/** Closes every app a test started, so temp directories and handles never leak. */
+export async function closeAllApps(): Promise<void> {
+  await Promise.all(created.splice(0).map((t) => t.close()));
+}
+
 export interface TestApp {
   app: FastifyInstance;
   db: Db;
@@ -48,16 +55,21 @@ export async function makeApp(
   });
   options.routes?.(app);
   await app.ready();
-  return {
+  let closed = false;
+  const testApp: TestApp = {
     app,
     db,
     dataDir,
     close: async () => {
+      if (closed) return;
+      closed = true;
       await app.close();
       db.close();
       rmSync(dataDir, { recursive: true, force: true });
     },
   };
+  created.push(testApp);
+  return testApp;
 }
 
 export interface Part {

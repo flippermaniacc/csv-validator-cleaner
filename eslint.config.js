@@ -1,5 +1,6 @@
 import { builtinModules } from 'node:module';
 import js from '@eslint/js';
+import globals from 'globals';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
@@ -21,13 +22,7 @@ export default tseslint.config(
     // Plain JS tooling files (this config, dependency-cruiser) run under Node.
     files: ['**/*.{js,cjs,mjs}'],
     languageOptions: {
-      globals: {
-        module: 'readonly',
-        require: 'readonly',
-        process: 'readonly',
-        console: 'readonly',
-        URL: 'readonly',
-      },
+      globals: { ...globals.node },
     },
   },
   {

@@ -12,7 +12,7 @@ async function fillBasicSchema(u: ReturnType<typeof user>) {
   await u.type(within(column(1)).getByLabelText('Name'), 'id');
 }
 
-describe('SchemaEditor: creating (FR-28)', () => {
+describe('SchemaEditor: creating (FR-28, AC-38)', () => {
   it('builds the request body from the form and returns to the list', async () => {
     const api = fakeApi();
     api.createSchema.mockResolvedValue(schemaResource());
