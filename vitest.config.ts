@@ -1,4 +1,7 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+
+const coreSource = fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url));
 
 export default defineConfig({
   test: {
@@ -10,7 +13,10 @@ export default defineConfig({
     },
     projects: [
       { test: { name: 'core', root: 'packages/core', include: ['test/**/*.test.ts'] } },
-      { test: { name: 'api', root: 'packages/api', include: ['test/**/*.test.ts'] } },
+      {
+        resolve: { alias: { '@csv-validator/core': coreSource } },
+        test: { name: 'api', root: 'packages/api', include: ['test/**/*.test.ts'] },
+      },
       { test: { name: 'web', root: 'packages/web', include: ['test/**/*.test.ts'] } },
     ],
   },

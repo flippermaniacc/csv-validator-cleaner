@@ -3,9 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@csv-validator/core": "*",
+    "@fastify/cors": "^11.3.1",
+    "better-sqlite3": "^12.11.1",
+    "fastify": "^5.12.7",
+    "re2": "^1.27.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0"
   }
 }
