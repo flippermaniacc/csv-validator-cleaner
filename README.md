@@ -209,16 +209,19 @@ Run `npm run build` before `npm run smoke`. Tests cover each rule, the pipeline 
 | full API upload, typical   | 267 ms | 309 ms | 299 MiB            |
 | full API upload, all-error | 273 ms | 308 ms | 256 MiB            |
 
-The budget is p95 under 5 s. Memory figures include Node and the `tsx` loader. With the default (large) V8 heap, RSS can drift to about 590 MiB across many runs because V8 delays garbage collection; `npm run bench -- --heap-mib 256` shows it stays at or below about 335 MiB when the heap is capped, so run the server with `--max-old-space-size` if memory is tight. Details are in [`docs/03-validation-report.md`](docs/03-validation-report.md).
+The budget is p95 under 5 s. Memory figures include Node and the `tsx` loader. With the default (large) V8 heap, RSS can drift to about 590 MiB across many runs because V8 delays garbage collection; `npm run bench -- --heap-mib 256` shows ordinary files then stay at or below about 335 MiB. Do not treat a heap cap as a safety net, though: a 10 MiB file of millions of tiny rows is a different shape (see Known limitations) and ends the server process when the heap is capped at 1 GiB or less. Details are in [`docs/03-validation-report.md`](docs/03-validation-report.md).
 
 ## Known limitations
 
+- **Memory depends on the shape of the file, not only its size.** Ordinary files of 10 MiB need about 250 MiB, but a single-column file of about 5.2 million tiny rows peaks at roughly 1.85 GiB, and with a small V8 heap it aborts the whole server. There is no guard against this yet.
+- **One server per data directory.** Two instances sharing `DATA_DIR` can delete each other's in-flight cleaned files at start-up; nothing prevents it.
+- **Download file names are ASCII only.** Other characters become `_`, so `отчёт.csv` downloads as `_.cleaned.csv`.
 - **One file at most 10 MiB, processed inline.** Validation blocks the server's event loop for the (short) duration of a run, so it suits one user, not many. Worker threads are the first v2 step.
 - **No login.** Loopback only; see Security notes.
-- **Encodings and delimiters.** UTF-8, UTF-16 with a BOM, else windows-1251; `,` or `;` only. A legacy file in another single-byte encoding will decode wrongly without an error (the detected encoding is shown on every run). There is no manual override yet.
+- **Encodings and delimiters.** UTF-8, UTF-16 with a BOM, else windows-1251; `,` or `;` only. A legacy file in another single-byte encoding will decode wrongly without an error, and so will a UTF-8 file with even one invalid byte (the whole file falls back to windows-1251). The detected encoding is shown on every run but not flagged as a warning, and there is no manual override yet.
 - **Regex dialect is RE2.** No lookahead, lookbehind or backreferences; schemas using them are rejected on save.
 - **Errors are capped at 1000 stored per run** (counts stay exact). There is no export of the full list.
-- **Sanitising adds a character.** Re-uploading a cleaned file can trip a strict `pattern`, `enum` or `max` length on cells that begin with `=`, `+`, `-` or `@`.
+- **Sanitising has side effects.** Text that begins with `=`, `+`, `-` or `@` gets a leading `'`, so phone numbers such as `+49 170…` change, and re-uploading a cleaned file can trip a strict `pattern`, `enum` or `max` length on such cells. Pass-through cells that begin with a tab or carriage return are not prefixed.
 - **Unique is per column**, no composite keys. No per-column case normalisation. No `.xlsx`.
 - **Runs and cleaned files are kept until you delete them**; there is no expiry and no disk-usage view.
 - **A busy port stops the server from starting.** Nothing picks another port for you: set `PORT`. The dev web app proxies `/api` to port 3001, so with `npm run dev` that port must be free.

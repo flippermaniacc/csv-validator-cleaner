@@ -10,6 +10,7 @@ The author set the rules at the start and kept them throughout:
 - **Document first.** Problem definition, then requirements (SRS), then design, then a milestone roadmap, then code. Each document was reviewed and committed by the author before the next began.
 - **One milestone at a time.** The assistant wrote code and tests and ran typecheck, lint, formatting, tests and build until green. It then stopped with a summary and a suggested commit message and waited for the author's go-ahead.
 - **The assistant never ran `git add`, `commit` or `push`.** The author reviewed every diff and made every commit. A shell hook also blocked those commands.
+- **Independent review before submission.** Once the build and documents were done, the author had the repository reviewed adversarially in a separate session (§6).
 - **Comment style set by the author:** selective comments that cite requirement IDs, JSDoc of one or two lines, acceptance-criteria IDs in test names.
 
 ## 2. Who decided what
@@ -64,9 +65,45 @@ Listed plainly, because the author needs to know which parts of the repository d
 
 ## 5. What the assistant did not do
 
-It did not commit, push or publish anything. It did not make product decisions: where the SRS was silent it proposed a default and asked, and the author's answers are what is built. It did not run the application in a real browser. It cannot tell whether the author understands the code; §6 is a checklist, not a claim.
+It did not commit, push or publish anything. It did not make product decisions: where the SRS was silent it proposed a default and asked, and the author's answers are what is built. It did not run the application in a real browser. It cannot tell whether the author understands the code; §7 is a checklist, not a claim.
 
-## 6. What the author should be able to explain
+## 6. The independent adversarial review
+
+### 6.1 What it was
+
+After the code and documents were finished, the author stress-tested the repository by running an independent, adversarial review in a **separate, fresh session**, with no shared context and with the aim of breaking the solution rather than approving it. The assistant that built the system did not take part and did not see that session. It received the author's summary of five findings, so everything below about the review itself is second-hand. What the assistant could do was check each finding against the code and record the result.
+
+### 6.2 Findings, and what happened to each
+
+| # | Finding (as reported) | Re-checked by the building assistant | Outcome |
+|---|---|---|---|
+| 1 | A 10 MiB single-column file with about 5.2 million rows can use about 1.7 GB, because of per-row array copies. | Ran `core` on such a file. | **Confirmed and worse than reported in one respect.** 1.85 GiB peak (1.27 GiB if every row is an error), finishing in about 2 s. With the V8 heap capped at 1 GiB or 512 MiB the process aborts with an uncatchable out-of-memory error. Accepted as a v1 trade-off by the author. |
+| 2 | One corrupt byte in UTF-8 makes the whole file decode as windows-1251. | Decoded a small file with and without a stray byte. | Confirmed (`José` becomes `JosГ©`). It is disclosed in the run's metadata and shown on the run page, but not flagged. |
+| 3 | `+`-prefixed phone numbers get an apostrophe; pass-through cells starting with tab or carriage return are not prefixed. | Ran both through `processCsv`. | Confirmed. The first is the intended trade-off; the second is a gap against common formula-injection guidance, limited to pass-through cells (schema columns are trimmed first). |
+| 4 | Two servers on one `DATA_DIR` can collide in the startup sweep. | Reasoned from how the sweep works; did not reproduce with two processes. | Plausible and unverified. |
+| 5 | Non-ASCII download file names become `_`. | Existing tests already assert it. | Confirmed. |
+
+No code was changed in response. The author's instruction was to document the findings, so they are recorded in `03-validation-report.md` §7.1 (with severity, evidence, mitigation and a v2 fix for each) and, as plain statements, in the README's known limitations. The assistant did change one existing sentence in the README because the review showed it was wrong: it had advised capping the heap if memory was tight, which suits ordinary files and is harmful for finding 1. It also corrected the NFR-2 analysis in the validation report, which had concluded that the memory budget was met after testing only files with ordinary row widths.
+
+The assistant's own view, offered as a recommendation and not a decision: only finding 1 affects availability, so it is the one worth a guard (for example rejecting a row count that is implausible for the file size) before the tool is used on files the author did not choose. The other four are inconveniences or small gaps that are fine to leave documented.
+
+### 6.3 What the review showed about the building session's blind spots
+
+Each finding is something the build session could have caught and did not. They share a cause: the build session tested what it had imagined.
+
+- **Shape of input.** The benchmark generators produced rows of 70 to 100 bytes, and "worst case" was read as "every row has an error". Nobody asked what the worst case by file shape is. That is finding 1, and it also overturned the memory conclusion and a README recommendation that rested on the same narrow data.
+- **Hostile bytes at the edges.** Encoding and quoting were tested with well-formed examples of each supported encoding. A single bad byte in a large file was never tried.
+- **Treating the spec's list as complete.** FR-21 names four trigger characters and the assistant implemented exactly those. It did not check the list against general formula-injection guidance, which also includes tab and carriage return.
+- **Deployment assumptions left unwritten.** The design assumed one process and never said so, so nothing enforces or documents it (finding 4).
+- **Whose files these are.** The author treated windows-1251 as a first-class case, yet a Cyrillic file name was reduced to `_` and the tests simply asserted that behaviour. Passing tests showed the code did what was intended, not that the intent suited these users.
+
+### 6.4 Why this process is worth keeping
+
+- **Fresh context finds different things.** The build session had accumulated assumptions about what the tool was for; the reviewer had none and went looking for the edges. Both sessions were run by the same author, but only one carried the history.
+- **The review is an input, not a verdict.** The assistant verified what it could and said plainly what it could not (finding 4). It did not simply accept the claims, and it did not argue with them either: the one it measured turned out to be understated.
+- **Limits.** The review's thoroughness is unknown, and its output was passed on in summary. Findings that become fixes should become regression tests (a narrow-file case in the benchmark, a corrupt-byte case in the decoder tests), so they cannot return unnoticed. In a future project the review's own output should be kept in the repository.
+
+## 7. What the author should be able to explain
 
 If someone asks about this project, these are the things the author should be able to answer from memory. Each points at where to look.
 
@@ -82,5 +119,6 @@ If someone asks about this project, these are the things the author should be ab
 10. **How to read the benchmark.** Fast (p95 about 0.3 s), memory per request about 250 MiB, and why uncapped repeated runs show about 590 MiB (V8 garbage-collection laziness, not a leak).
 11. **The deviations from the written requirements.** `03-validation-report.md` §3 lists them; the SRS and design documents still say the old thing until they are synced.
 12. **The mistakes in §4**, including the deleted `./data` directory.
+13. **The five limitations from the adversarial review (§6.2)**, which one can take the server down (a file of millions of tiny rows, 1.85 GiB, and a fatal abort under a small heap), and why the earlier advice to cap the heap was wrong for it.
 
-Things the author should not claim: that the web app was tested in a real browser, that it runs on Linux or Windows, that it is safe on a shared network, or that the SRS and design documents match the final code.
+Things the author should not claim: that the web app was tested in a real browser, that it runs on Linux or Windows, that it is safe on a shared network, that the SRS and design documents match the final code, or that memory use is bounded for every 10 MiB file.

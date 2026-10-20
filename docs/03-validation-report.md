@@ -1,20 +1,20 @@
 # 03 — Validation Report: CSV Validator & Cleaner v1
 
-Status: Final for v1
+Status: Final for v1; revised after an independent adversarial review (§7.1)
 Checked against: `01-srs.md` (v0.3) and `02-design.md` (v0.2)
 
 This report answers three questions: did we build what the SRS asked for, how do we know, and where did the result differ from the documents or fall short.
 
 ## 1. Verdict
 
-All 133 identified requirements and acceptance criteria (73 FR, 13 NFR, 47 AC) are implemented. None is unmet. Three are only partly verified and two carry a caveat; they are listed here so nobody has to find them in the tables.
+All 133 identified requirements and acceptance criteria (73 FR, 13 NFR, 47 AC) are implemented, with one exception: NFR-2, a SHOULD about memory, is **not met for files made of extremely short rows** (§2.1, §7.1). Three items are only partly verified and one carries a deviation; they are listed here so nobody has to find them in the tables.
 
 | Item | State | Why |
 |---|---|---|
 | NFR-10 usability | Partly verified | Controls are labelled and the component tests find them by label and role, and the layout is responsive, but keyboard order was never tested, there has been no accessibility audit, and nothing was checked in a real browser. |
 | NFR-11 portability | Partly verified | Built and run on macOS (Apple silicon) only. No Linux or Windows run, no CI. |
 | AC-38 UI flow | Partly verified | Proven with component tests against a stubbed API (including one test that walks create schema → upload → report → download), and the API half is proven over real HTTP by `npm run smoke`. The two have not been joined in a real browser. |
-| NFR-2 memory (SHOULD) | Met, with a caveat | One request peaks at 234–304 MiB RSS. Over 20 repeated runs with an uncapped V8 heap RSS drifts to about 590 MiB because V8 delays garbage collection; with the heap capped at 256 MiB it stays at or below 333 MiB. See §2.1. |
+| NFR-2 memory (SHOULD) | Met for ordinary files; **not met for extremely narrow files** | Files with ordinary row widths peak at 234–304 MiB for one request. A 10 MiB file of about 5.2 million two-byte rows peaks at 1.85 GiB (1.27 GiB if every row is an error), and with the V8 heap capped at 1 GiB or less it aborts the whole process. Found by the adversarial review and measured afterwards. See §2.1 and §7.1 #1. |
 | NFR-13 hardening | Met, with a deviation | The Host check compares host names, not host and port (§3.1). |
 
 ## 2. Evidence
@@ -28,6 +28,7 @@ Everything below was run on the final tree.
 | Coverage of `packages/core` (`npm run test:coverage`) | 99.75% lines, 98.94% statements, 97.87% branches, 100% functions (threshold 90%). |
 | `npm run smoke` | 12 checks pass over real HTTP against the built server: health, built SPA with CSP, create schema, upload with expected counts, ordered errors, cleaned download, 413 at 10 MiB + 1 byte, history, 403 for a foreign Host and Origin, delete, clean SIGTERM exit. |
 | `npm run bench` | PASS. p95 between 252 and 309 ms against a 5 s budget; first-request RSS 234–299 MiB. |
+| Independent adversarial review (separate session) | Five findings, all accepted for v1 and written up in §7.1. The assistant re-checked four by running code (memory, encoding, sanitising, filenames) and reasoned about the fifth (multi-instance sweep). One of them, the narrow-file memory use, overturned a conclusion in §2.1. |
 | Mutation checks | At milestones M7, M8, M10, M11 and M12 a key behaviour was deliberately broken to confirm a test fails (empty cells skipping rules, the stop at a type failure, the 1000-error cap, the case-insensitive name key, sanitizer double-prefix, header quoting, pass-through header sanitising, DB-failure cleanup, keyset tie-break, code filter, delete ordering). One survivor was found and fixed (§3.4). |
 | Golden files | 12 fixtures under `packages/core/test/fixtures/golden`; each expected output was read by hand before being accepted. |
 
@@ -55,7 +56,15 @@ Heap capped at 256 MiB (`npm run bench -- --heap-mib 256`):
 
 - **Time (NFR-1, AC-40):** met with a factor of 15 or more to spare. "Full API upload" includes the multipart parse, SHA-256, validation, cleaning, the file write and the database insert.
 - **AC-41:** on the all-error file every run held exactly 1000 errors while counting 964,747 exactly (`137,821 rows × 7`). The same property is asserted in `packages/core/test/bench-data.test.ts`.
-- **NFR-2:** it says the server SHOULD stay under 512 MB resident. An early run of the benchmark showed 532–592 MiB peaks and looked like a failure. Two further runs showed it was not a leak: a single request needs about 234–304 MiB (including Node and the `tsx` loader), and a capped heap holds the sustained peak at or below 333 MiB over 20 runs. The uncapped drift is V8 declining to collect garbage while it has memory to spare. The benchmark therefore gates NFR-2 on the first-request peak and reports the sustained peak for information. Anyone running in a small container should set `--max-old-space-size`.
+- **NFR-2, ordinary rows:** it says the server SHOULD stay under 512 MB resident. An early run of the benchmark showed 532–592 MiB peaks and looked like a failure. Two further runs showed it was not a leak: a single request needs about 234–304 MiB (including Node and the `tsx` loader), and a capped heap holds the sustained peak at or below 333 MiB over 20 runs. The uncapped drift is V8 declining to collect garbage while it has memory to spare. The benchmark therefore gates NFR-2 on the first-request peak and reports the sustained peak for information.
+- **NFR-2, extremely narrow rows (not covered by the benchmark above):** the generators produce rows of roughly 70 to 100 bytes, so they never exercise a file with millions of tiny rows. The adversarial review pointed out that `core` keeps several arrays per row, which costs more memory than the bytes themselves when rows are tiny. Measured afterwards on `core` alone (Node 22.13, M1), with a single-column file of exactly 10 MiB and 5,242,879 two-byte rows:
+
+  | File | Time | Peak RSS |
+  |---|---|---|
+  | every row valid | 2.1 s | 1.85 GiB |
+  | every row an error (integer column, value `x`) | 1.6 s | 1.27 GiB |
+
+  Time stays inside 5 s, so AC-40 is not contradicted, but memory is more than three times the 512 MiB target. With `--max-old-space-size` set to 1024 or 512 the same input ends the process with a fatal "heap out of memory" abort that cannot be caught. In the server that would stop every in-flight request. **The earlier advice to cap the heap for small containers therefore only holds for ordinary row widths; for narrow files it makes things worse.** The README has been corrected.
 - These figures come from one machine. They show the design has a large margin, not what any other machine will do.
 
 ## 3. Differences from the documents
@@ -207,7 +216,7 @@ Abbreviations: `core` = `packages/core`, `api` = `packages/api`, `web` = `packag
 | ID | Implementation and evidence | Status |
 |---|---|---|
 | NFR-1 performance | p95 252–309 ms for 10 MiB (typical and all-error, core and full API); `scripts/bench.ts`, `bench-data.test`. See §2.1. | Met |
-| NFR-2 memory | First request 234–304 MiB; the error list is capped (`report.ts`); sustained RSS depends on V8 heap, see §2.1. | Met, with caveat |
+| NFR-2 memory | First request 234–304 MiB for ordinary rows; the error list is capped (`report.ts`). Not met for a file of millions of tiny rows: 1.85 GiB peak, and an uncatchable abort under a small heap. See §2.1 and §7.1 #1. | Met for ordinary files; not met for extremely narrow ones |
 | NFR-3 determinism | No `Date`, `Math.random`, `Intl` or locale calls in `core` (lint rule); `clean.test` (time zones), `properties.test`, golden files. | Met |
 | NFR-4 idempotence | `clean.test`, `properties.test`: cleaned output revalidates with zero errors and reproduces itself. Limits are documented (sanitising adds a character). | Met |
 | NFR-5 purity | `core` has no I/O, clock, randomness or native modules; ids and times are assigned by the API. Lint and `boundaries.test`. | Met |
@@ -263,7 +272,7 @@ Abbreviations: `core` = `packages/core`, `api` = `packages/api`, `web` = `packag
 | AC-37 | API error statuses | `schemas.routes.test`, `validations.test`, `runs.routes.test` | Met |
 | AC-38 | UI: create a schema, upload, see summary and errors, download, truncation notice | `flow.test`, `SchemaEditor.test`, `Validate.test`, `RunDetail.test`; API half in `smoke.mjs` | Partly verified (§1) |
 | AC-39 | Package boundaries | lint, `boundaries.test`, `regex.test`; `core` tests run on a non-RE2 engine | Met |
-| AC-40 | 10 MiB in at most 5 s at p95 over 20 runs, all-error included | `scripts/bench.ts`, `bench-data.test` | Met |
+| AC-40 | 10 MiB in at most 5 s at p95 over 20 runs, all-error included | `scripts/bench.ts`, `bench-data.test`. The extreme narrow file (5.2 million rows) was also timed once on `core`: 2.1 s. | Met |
 | AC-41 | At most 1000 errors held, exact counts | `scripts/bench.ts`, `bench-data.test` | Met |
 | AC-42 | Coverage 90% or more; every error code exercised | coverage run, `golden.test`, `validations.test` | Met |
 | AC-43 | Loopback by default; no cell values in logs | `config.test`, `smoke.mjs`, `logging.test`, `validations.test` | Met |
@@ -280,7 +289,28 @@ A throwaway script collected the 133 identifiers from the bold IDs in `01-srs.md
 - A hardened local API and a small React app, served from one port.
 - Measured performance with a large margin, and a smoke script that proves the built product works end to end.
 
-## 7. Technical debt and v2 candidates
+## 7. Known limitations and technical debt
+
+This section lists what v1 does not do well, in two parts: first the weak spots found by an independent adversarial review (see `04-ai-usage.md` §6), then the longer list of v2 candidates. Nothing in 7.1 was changed in code; each item was accepted as a v1 trade-off by the author and is recorded here, in the README, and where relevant in the documents above.
+
+### 7.1 Found by the independent adversarial review
+
+The review ran in a separate, fresh session with no shared context. The building assistant received the author's summary of the five findings and re-checked each one by running code where it could. Only the first can affect availability; the others affect correctness or convenience.
+
+| # | Finding | How it was re-checked | Result | Why accepted in v1 | Mitigation today | Fix for v2 |
+|---|---|---|---|---|---|---|
+| 1 | **Memory on extremely narrow files.** A 10 MiB single-column file with about 5.2 million rows uses roughly 1.7 GB because `core` builds several arrays per row (parsed record, cleaned copy, output line). | Ran `core` on a 5,242,879-row file. | Confirmed: 1.85 GiB peak RSS for valid rows, 1.27 GiB for all-error rows; 2.1 s and 1.6 s. With the heap capped at 1 GiB or 512 MiB the process aborts with a fatal out-of-memory error. | Typical and wide files are cheap (about 250 MiB for 10 MiB), and v1 is a single-user local tool, so the worst case is a self-inflicted stop. | None in code. Do not cap the heap on the assumption that it makes memory safe. Keep the server on a machine with a few GB free. | Reject files whose row count is implausible for their size, or process with lazy iterators and write the cleaned output as it goes (the streaming step in design §9). Add a narrow-file case to `npm run bench`. |
+| 2 | **Encoding fallback.** One unrecoverable byte in an otherwise valid UTF-8 file makes the whole file decode as windows-1251. | Decoded a small file with and without a stray `0xFF`. | Confirmed: `José` becomes `JosГ©`. The run records `windows-1251` and the run page shows it, but nothing marks it as a warning. | FR-9 defines this order; windows-1251 is a deliberate last resort that never fails. | The detected encoding is stored with every run and displayed. | Flag a run when the fallback was used, report the count of replaced or non-ASCII characters, and add a manual encoding override. |
+| 3 | **Formula sanitising.** Text starting with `+` is prefixed, so phone numbers such as `+49 170…` become `'+49 170…`. Pass-through cells that begin with a tab or carriage return are not prefixed. | Ran both cases through `processCsv`. | Confirmed. In a text column `+49 170 1234567` becomes `'+49 170 1234567`. A pass-through `\t=1+1` and `"\r=2+2"` come out unchanged. Schema columns are trimmed first, so a leading tab there is removed and the `=` is then caught; only pass-through cells, which are deliberately untouched, are exposed. | Excel safety was chosen over phone formatting (SRS decision 1); FR-21 lists exactly four trigger characters. | None in v1: the apostrophe is added whether the column is declared or passes through, so anything that reads the cleaned CSV programmatically must strip it. | Per-column opt-out for sanitising (for example a `phone` flavour that only allows a leading `+` followed by digits), and add tab and carriage return to the trigger set as common guidance does. |
+| 4 | **Multi-instance sweep race.** Two servers started on the same `DATA_DIR` can collide: the startup sweep of one deletes cleaned files whose run the other has written but not yet committed. | Reasoned from the sweep's definition (it removes any `<id>.csv` without a run row, and any `.tmp`). Not reproduced with two real processes. | Plausible: a file written by instance A and swept by instance B before A's insert leaves a run whose download answers 404. The window is small. | v1 is documented as a single process; nothing enforces it. | Run one instance per data directory. | A lock file in `DATA_DIR`, or sweep only files older than a minute. Both instances share SQLite safely in WAL mode, so the sweep is the only known conflict. |
+| 5 | **Download filenames.** Non-ASCII characters are replaced with `_`, so `отчёт.csv` downloads as `_.cleaned.csv`. | Already covered by existing tests, which assert the replacement. | Confirmed, and a poor fit for users who also rely on windows-1251 data. | The sanitiser keeps the header safe from injection with a simple rule. | The original file name is still shown in the UI and history; only the saved name changes. | Send an RFC 5987 `filename*` with the UTF-8 name next to an ASCII fallback. |
+
+Two further observations came out of this:
+
+- **The benchmark's idea of a worst case was too narrow.** AC-40 says "all-error included", and that is what the generators cover. Nobody had asked what the worst case by file *shape* is, which is what finding 1 is.
+- **A recommendation in the README was wrong for that shape.** It advised running with `--max-old-space-size` if memory is tight. For ordinary files that is right; for a narrow file it converts a large allocation into a process abort. It has been replaced with a warning.
+
+### 7.2 Other known limitations and v2 candidates
 
 In rough order of value:
 
@@ -288,7 +318,7 @@ In rough order of value:
 2. **A real-browser test and an accessibility pass** (for example Playwright and axe), to close NFR-10 and AC-38.
 3. **CI on Linux and macOS**, to close NFR-11 and to run `bench` and `smoke` on every change.
 4. **Sync the documents**: SRS v0.4 for §3.1 above, design v0.3 for §3.2.
-5. **Streaming parsing and writing** for files beyond 10 MiB; the unique-value map then becomes the memory driver.
+5. **Streaming parsing and writing**, which also fixes §7.1 #1 and lifts the 10 MiB limit; the unique-value map then becomes the memory driver. Until then, consider a row-count guard.
 6. **Retention**: an expiry or a "delete runs older than N days" action and a disk-usage view, since runs are kept forever.
 7. **Export of all errors**, not just the first 1000, and a manual encoding override.
 8. **Schema inference**: suggest a schema from a sample file using deterministic statistics, never silently applied.
