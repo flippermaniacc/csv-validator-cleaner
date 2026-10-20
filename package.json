@@ -16,8 +16,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "build": "tsc -b",
-    "test:coverage": "vitest run --coverage"
+    "build": "tsc -b && npm run build -w @csv-validator/web",
+    "test:coverage": "vitest run --coverage",
+    "dev:api": "npm run dev -w @csv-validator/api",
+    "dev:web": "npm run dev -w @csv-validator/web"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

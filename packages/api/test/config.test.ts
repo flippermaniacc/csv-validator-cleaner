@@ -9,6 +9,7 @@ describe('loadConfig', () => {
       port: 3001,
       dataDir: resolve('./data'),
       webOrigin: 'http://localhost:5173',
+      webDist: expect.stringMatching(/packages[/\\]web[/\\]dist$/),
       allowedHosts: [],
     });
   });
@@ -19,6 +20,7 @@ describe('loadConfig', () => {
       PORT: '8080',
       DATA_DIR: '/var/lib/csv',
       WEB_ORIGIN: 'https://app.example',
+      WEB_DIST: '/srv/web',
       ALLOWED_HOSTS: ' Csv.Example , ,other.local ',
     });
     expect(config).toEqual({
@@ -26,6 +28,7 @@ describe('loadConfig', () => {
       port: 8080,
       dataDir: '/var/lib/csv',
       webOrigin: 'https://app.example',
+      webDist: '/srv/web',
       allowedHosts: ['csv.example', 'other.local'],
     });
   });

@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export interface Config {
   host: string;
@@ -7,9 +8,14 @@ export interface Config {
   dataDir: string;
   /** The one browser origin allowed by CORS and the Origin check (NFR-13). */
   webOrigin: string;
+  /** Built SPA to serve; skipped when `index.html` is absent. */
+  webDist: string;
   /** Extra Host header names accepted besides loopback and `host`. */
   allowedHosts: string[];
 }
+
+// packages/api/{src,dist}/config.js -> packages/web/dist
+const DEFAULT_WEB_DIST = fileURLToPath(new URL('../../web/dist', import.meta.url));
 
 export const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 
@@ -23,6 +29,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port,
     dataDir: resolve(env['DATA_DIR'] ?? './data'),
     webOrigin: env['WEB_ORIGIN'] ?? 'http://localhost:5173',
+    webDist: resolve(env['WEB_DIST'] ?? DEFAULT_WEB_DIST),
     allowedHosts: (env['ALLOWED_HOSTS'] ?? '')
       .split(',')
       .map((h) => h.trim().toLowerCase())

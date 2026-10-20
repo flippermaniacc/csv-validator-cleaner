@@ -5,17 +5,20 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "dev": "tsx watch --tsconfig tsconfig.json src/main.ts"
   },
   "dependencies": {
     "@csv-validator/core": "*",
     "@fastify/cors": "^11.3.1",
     "@fastify/multipart": "^10.1.4",
+    "@fastify/static": "^10.1.6",
     "better-sqlite3": "^12.11.1",
     "fastify": "^5.12.7",
     "re2": "^1.27.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0"
+    "@types/better-sqlite3": "^9.6.0",
+    "tsx": "^4.23.15"
   }
 }

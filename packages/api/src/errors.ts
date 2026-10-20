@@ -25,8 +25,19 @@ function envelope(requestId: string, code: string, message: string, details?: un
  * Registers the envelope-producing handlers. Logs only ids and codes, never messages,
  * because parser errors can quote request content (NFR-9).
  */
-export function registerErrorHandling(app: FastifyInstance): void {
+export function registerErrorHandling(
+  app: FastifyInstance,
+  options: { spaIndex?: string | null } = {},
+): void {
   app.setNotFoundHandler((request, reply) => {
+    const wantsPage =
+      request.method === 'GET' &&
+      !request.url.startsWith('/api/') &&
+      (request.headers.accept ?? '').includes('text/html');
+    if (options.spaIndex && wantsPage) {
+      void reply.code(200).type('text/html; charset=utf-8').send(options.spaIndex);
+      return;
+    }
     void reply
       .code(404)
       .send(

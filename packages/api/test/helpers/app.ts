@@ -14,6 +14,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     port: 3001,
     dataDir: '/unused',
     webOrigin: SPA_ORIGIN,
+    webDist: '/nonexistent-web-dist',
     allowedHosts: [],
     ...overrides,
   };

@@ -7,6 +7,7 @@ import { RunsRepo } from './db/runs.repo.js';
 import { SchemasRepo } from './db/schemas.repo.js';
 import { registerErrorHandling } from './errors.js';
 import { re2Engine } from './regex-re2.js';
+import { loadSpaIndex, registerStatic } from './static.js';
 import { registerSchemaRoutes } from './routes/schemas.routes.js';
 import { registerRunRoutes } from './routes/runs.routes.js';
 import { registerValidationRoutes } from './routes/validations.routes.js';
@@ -49,7 +50,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     void reply.header('x-request-id', request.id);
   });
 
-  registerErrorHandling(app);
+  const spaIndex = loadSpaIndex(config.webDist);
+  registerErrorHandling(app, { spaIndex });
   await registerSecurity(app, config);
 
   app.get('/api/health', async () => {
@@ -71,6 +73,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     new ValidationService({ schemas, runs, files, regex, now, newId }),
   );
   registerRunRoutes(app, { runs, files });
+  if (spaIndex) await registerStatic(app, config.webDist);
 
   return app;
 }

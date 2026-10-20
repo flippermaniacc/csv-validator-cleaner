@@ -17,7 +17,15 @@ export default defineConfig({
         resolve: { alias: { '@csv-validator/core': coreSource } },
         test: { name: 'api', root: 'packages/api', include: ['test/**/*.test.ts'] },
       },
-      { test: { name: 'web', root: 'packages/web', include: ['test/**/*.test.ts'] } },
+      {
+        test: {
+          name: 'web',
+          root: 'packages/web',
+          environment: 'jsdom',
+          include: ['test/**/*.test.{ts,tsx}'],
+          setupFiles: ['./test/setup.ts'],
+        },
+      },
     ],
   },
 });
